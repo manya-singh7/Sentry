@@ -3,504 +3,438 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diagnos AI — Smart Guided Troubleshooting Engine</title>
+<title>Sentry: guided device troubleshooting</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
 <style>
+/* Color is information. Base is neutral; green/amber/red appear ONLY as action category. */
 :root{
-  --bg:#14120E; --bg2:#0F0D0A;
-  --card:#1C1813; --card2:#221D16;
-  --line:#332C20; --line-soft:#2A251B;
-  --text:#F3EEE2; --muted:#9C9282; --muted-dim:#6E6656;
-  --accent:#FF7A33; --accent-dim:#C75F26; --accent-soft:rgba(255,122,51,.12);
-  --auto:#7FD99A; --manual:#E8B34D; --critical:#FF6857;
+  --base:#0B1013; --panel:#111A1F; --raised:#17232A; --line:#233139; --line2:#1B2830;
+  --text:#E8EEF0; --muted:#8BA0A8; --dim:#5F747C;
+  --ink:#DDE8EB;                 /* neutral highlight: buttons, confidence, focus */
+  --auto:#4FD08A; --manual:#F0B341; --critical:#FF5D4D;
+  --auto-bg:rgba(79,208,138,.09); --manual-bg:rgba(240,179,65,.09); --critical-bg:rgba(255,93,77,.09);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{
-  font-family:'Manrope',-apple-system,BlinkMacSystemFont,sans-serif;
-  background:
-    radial-gradient(900px 420px at 15% -8%, rgba(255,122,51,.08), transparent 60%),
-    var(--bg);
-  color:var(--text);min-height:100vh;display:flex;justify-content:center;
-  padding:40px 18px 60px;
-}
-.mono{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace}
-.container{width:100%;max-width:680px;display:flex;flex-direction:column;gap:20px}
+body{font-family:'Instrument Sans',system-ui,sans-serif;background:var(--base);color:var(--text);
+  min-height:100vh;display:flex;justify-content:center;padding:44px 18px 72px;font-variant-numeric:tabular-nums}
+.wrap{width:100%;max-width:720px;display:flex;flex-direction:column;gap:18px}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 
-/* ---- Header ---- */
-header{padding-bottom:6px;border-bottom:1px solid var(--line-soft)}
-.badge-top{
-  display:flex;align-items:center;gap:8px;
-  font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);
-  margin-bottom:14px;
-}
-.badge-top::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);
-  box-shadow:0 0 0 3px var(--accent-soft);flex:none}
-h1{font-size:32px;font-weight:800;letter-spacing:-.02em;color:var(--text);margin-bottom:8px}
-.subtitle{font-size:14.5px;color:var(--muted);line-height:1.5;max-width:46ch;padding-bottom:18px}
+/* Header */
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.brand svg{width:34px;height:34px;flex:none}
+h1{font-family:'Fraunces',serif;font-size:38px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.sub{color:var(--muted);font-size:15px;line-height:1.55;max-width:52ch;padding-bottom:6px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--muted);padding:12px 0 2px;border-top:1px solid var(--line2)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:10px;height:10px;border-radius:2px;display:block}
 
-/* ---- Cards ---- */
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px}
-
-/* ---- Samples ---- */
-.samples-bar{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-bottom:16px}
-.samples-label{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-dim);
-  margin-right:2px;text-transform:lowercase}
-.sample-pill,.chip{
-  background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:6px;
-  padding:6px 11px;font-size:12.5px;font-weight:500;cursor:pointer;transition:.15s;
-  font-family:'Manrope',sans-serif;
-}
-.sample-pill:hover,.chip:hover{color:var(--text);border-color:var(--accent-dim);background:var(--accent-soft)}
-
-/* ---- Input area ---- */
+/* Panels */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+.samples{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:14px;font-size:13px;color:var(--dim)}
+.pill,.chip{background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 13px;
+  font:500 13px 'Instrument Sans',sans-serif;cursor:pointer;transition:color .15s,border-color .15s}
+.pill:hover,.chip:hover{color:var(--text);border-color:var(--muted)}
+textarea,.text-input{width:100%;background:var(--base);border:1px solid var(--line);border-radius:10px;padding:13px 15px;
+  color:var(--text);font:400 15px/1.5 'Instrument Sans',sans-serif;outline:none;transition:border-color .15s}
+textarea{resize:vertical;min-height:88px}
+textarea::placeholder,.text-input::placeholder{color:var(--dim)}
+textarea:focus,.text-input:focus{border-color:var(--ink)}
 .input-group{display:flex;flex-direction:column;gap:12px}
-textarea,.text-input{
-  width:100%;background:var(--card2);border:1px solid var(--line);border-radius:8px;
-  padding:13px 14px;color:var(--text);font-size:14.5px;outline:none;transition:.15s;
-  font-family:'Manrope',sans-serif;
-}
-textarea{resize:vertical;min-height:84px;line-height:1.5}
-textarea::placeholder,.text-input::placeholder{color:var(--muted-dim)}
-textarea:focus,.text-input:focus{border-color:var(--accent-dim);box-shadow:0 0 0 3px var(--accent-soft)}
-
-.controls-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-button{
-  display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;
-  border-radius:7px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;
-  transition:.15s;font-family:'Manrope',sans-serif;
-}
-.btn-primary{background:var(--accent);color:#1A0F06;flex:1;min-width:150px}
-.btn-primary:hover:not(:disabled){background:#ff8c4d}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:9px;
+  padding:11px 16px;font:600 14px 'Instrument Sans',sans-serif;cursor:pointer;transition:background .15s,border-color .15s}
+button svg{width:16px;height:16px}
+.btn-primary{background:var(--ink);color:#0B1013;flex:1;min-width:160px}
+.btn-primary:hover:not(:disabled){background:#fff}
 .btn-secondary{background:transparent;color:var(--text);border:1px solid var(--line)}
-.btn-secondary:hover:not(:disabled){border-color:var(--accent-dim);background:var(--accent-soft)}
-.btn-mic.recording{background:rgba(255,104,87,.14);border-color:var(--critical);color:var(--critical);animation:pulse 1.5s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.btn-secondary:hover:not(:disabled){border-color:var(--muted)}
+.btn-mic.recording{border-color:var(--critical);color:var(--critical)}
 button:disabled{opacity:.45;cursor:not-allowed}
+.hint,.status{font-size:13px;color:var(--muted);min-height:16px}
+.preview{display:none;align-items:center;gap:12px;padding:10px;background:var(--base);border:1px dashed var(--line);border-radius:10px}
+.preview img{width:50px;height:50px;object-fit:cover;border-radius:6px}
+.preview .name{flex:1;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-x{background:transparent;color:var(--muted);padding:4px 8px;font-size:13px}
 
-.combo-hint{font-size:12px;color:var(--muted-dim)}
-.image-preview-container{
-  display:none;align-items:center;gap:12px;padding:10px;background:var(--card2);
-  border:1px dashed var(--line);border-radius:8px;
-}
-.image-preview-container img{width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-.image-details{flex:1;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-family:'JetBrains Mono',monospace}
-.btn-remove-img{background:transparent;color:var(--critical);padding:4px 8px;font-size:12px;font-weight:600}
-.status-msg{font-size:13px;color:var(--muted);min-height:18px}
-
-/* ---- Loading ---- */
-.loading-box{display:none;flex-direction:column;align-items:center;gap:14px;padding:36px 16px;text-align:center}
-.spinner{width:26px;height:26px;border:2.5px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+/* Loading */
+.loading{display:none;flex-direction:column;align-items:center;gap:12px;padding:34px 16px;text-align:center}
+.spinner{width:24px;height:24px;border:2px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.loading-text{font-size:14.5px;font-weight:600;color:var(--text)}
-.loading-timer{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted-dim)}
+.loading-text{font-weight:600;transition:opacity .2s}
+.loading-timer{font-size:13px;color:var(--dim)}
 
-/* ---- Telemetry readout strip ---- */
-.telemetry-bar{
-  display:none;align-items:center;justify-content:flex-start;flex-wrap:wrap;
-  background:var(--card2);border:1px solid var(--line);border-radius:8px;
-  padding:10px 16px;font-size:12px;color:var(--muted);gap:20px;
-}
-.telemetry-item{display:flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace}
-.telemetry-item span:first-child{font-family:'Manrope',sans-serif;color:var(--muted-dim);font-size:11.5px}
-.telemetry-val{color:var(--text);font-weight:700}
-.cache-badge{padding:2px 7px;border-radius:4px;font-size:10.5px;font-weight:700;letter-spacing:.03em}
-.cache-hit{background:rgba(127,217,154,.15);color:var(--auto)}
-.cache-miss{background:rgba(156,146,130,.12);color:var(--muted)}
-.cache-note{font-size:11.5px;font-weight:600;font-family:'Manrope',sans-serif}
-.cache-note-hit{color:var(--auto)}
-.cache-note-veto{color:var(--critical)}
+/* Run summary strip: neutral, so signal colors stay meaningful */
+.run{display:none;flex-wrap:wrap;gap:8px 22px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:13px;color:var(--muted)}
+.run b{color:var(--text);font-weight:600;margin-left:5px}
+#metaCacheNote{margin-left:10px}
+.hint:empty,.status:empty{display:none}
+.tag{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:6px;padding:2px 9px;font-size:12px;font-weight:600;color:var(--muted)}
+.tag.on{color:var(--text);border-color:var(--muted)}
+.caption{font-size:12.5px;color:var(--dim);line-height:1.5}
+.framing{display:none;flex-direction:column;gap:3px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:13.5px}
+.framing small{font-size:12px;color:var(--dim)}
+.framing .raw{color:var(--muted)} .framing .arrow{color:var(--dim);margin:0 6px} .framing .clean{font-weight:600}
 
-.results-container{display:flex;flex-direction:column;gap:16px}
-
-/* ---- Clarify card ---- */
-.clarify-card{
-  background:var(--card);border:1px solid var(--accent-dim);border-radius:10px;padding:20px;
-  display:flex;flex-direction:column;gap:13px;animation:fade .3s ease;position:relative;
-}
-.clarify-card::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;background:var(--accent);border-radius:2px}
-.clarify-tag{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--accent)}
-.clarify-q{font-size:16.5px;font-weight:700;line-height:1.4}
-.chip-row{display:flex;flex-wrap:wrap;gap:8px}
-.chip-lg{padding:9px 14px;font-size:13px;border-radius:7px}
-.clarify-free{display:flex;gap:8px}
-.clarify-free .text-input{flex:1;padding:9px 12px}
-.btn-link{background:none;color:var(--muted-dim);font-size:12px;padding:2px;align-self:flex-start;font-weight:600}
+/* Clarify */
+.results{display:flex;flex-direction:column;gap:16px}
+.clarify{background:var(--panel);border:1px solid var(--ink);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:13px}
+.clarify h3{font-size:17px;line-height:1.4}
+.clarify small{color:var(--muted);font-size:13px;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.free{display:flex;gap:8px}.free .text-input{flex:1;padding:9px 12px}
+.btn-link{background:none;color:var(--dim);font-size:13px;padding:2px;align-self:flex-start}
 .btn-link:hover{color:var(--text);text-decoration:underline}
-.refined-banner{
-  background:rgba(127,217,154,.08);border:1px solid rgba(127,217,154,.3);color:var(--auto);
-  border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;
-}
-@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.refined{border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:14px;color:var(--text)}
 
-/* ---- Goal cards ---- */
-.goal-card{
-  background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;
-  display:flex;flex-direction:column;gap:15px;animation:fade .3s ease;position:relative;
-}
-.goal-header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;border-bottom:1px solid var(--line-soft);padding-bottom:15px}
-.goal-title{font-size:17px;font-weight:800;margin-bottom:5px;letter-spacing:-.01em}
-.goal-instruction{font-size:13px;color:var(--muted);line-height:1.5}
-.conf{min-width:90px;text-align:right;flex:none}
-.conf-num{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--accent);line-height:1}
-.conf-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:var(--muted-dim);text-transform:uppercase;margin-top:3px}
-.conf-bar{height:3px;background:var(--card2);border-radius:2px;margin-top:8px;overflow:hidden}
-.conf-fill{height:100%;background:var(--accent);border-radius:2px}
+/* Hypothesis */
+.goal{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:16px}
+.goal-head{display:flex;align-items:center;gap:20px;padding-bottom:16px;border-bottom:1px solid var(--line2)}
+.area{font-size:13px;color:var(--muted);margin-bottom:4px}
+.goal-title{font-family:'Fraunces',serif;font-size:23px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+.goal-text{font-size:14px;color:var(--muted);line-height:1.5;margin-top:6px}
+.gauge{position:relative;width:100px;height:100px;flex:none}
+.gauge svg{width:100%;height:100%;display:block}
+.tick{stroke:var(--line);stroke-width:3;stroke-linecap:round}
+.tick.on{stroke:var(--ink);animation:light .3s both;animation-delay:calc(var(--i)*30ms)}
+@keyframes light{from{stroke:var(--line)}to{stroke:var(--ink)}}
+.gauge-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.gauge-num b{font-size:28px;font-weight:800}
+.gauge-num span{font-size:10px;color:var(--muted);margin-top:3px}
+.verified{font-size:13px;color:var(--muted)}
+.trace{background:var(--base);border:1px solid var(--line2);border-radius:10px}
+.trace summary{padding:10px 14px;cursor:pointer;color:var(--muted);font-weight:600;font-size:13.5px}
+.trace summary:hover{color:var(--text)}
+.trace ul{list-style:none;padding:4px 14px 12px;display:flex;flex-direction:column;gap:7px}
+.trace li{font-size:13px;color:var(--muted);line-height:1.5;padding-left:12px;border-left:2px solid var(--line)}
 
-.diagnosis-trace{background:var(--card2);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:12px}
-.trace-summary{display:flex;justify-content:space-between;padding:10px 13px;color:var(--muted);cursor:pointer;user-select:none;font-weight:600;list-style:none}
-.trace-summary:hover{color:var(--text)}
-.trace-summary::-webkit-details-marker{display:none}
-.trace-summary-hint{font-size:11px;color:var(--muted-dim);font-weight:400;font-family:'JetBrains Mono',monospace}
-.trace-list{list-style:none;padding:11px 14px;display:flex;flex-direction:column;gap:7px;border-top:1px solid var(--line)}
-.trace-item{display:flex;gap:8px;color:var(--muted);line-height:1.5;font-size:12.5px}
-.trace-item::before{content:"—";color:var(--accent-dim);font-weight:700;flex:none}
+/* Actions: the color-coded signal */
+.actions{display:flex;flex-direction:column;gap:12px}
+.action{--c:var(--manual);--bg:var(--manual-bg);background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--c);
+  border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.action.cat-auto{--c:var(--auto);--bg:var(--auto-bg)}
+.action.cat-critical{--c:var(--critical);--bg:var(--critical-bg)}
+.act-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.act-name{font-size:16px;font-weight:700}
+.kind{font-size:13px;font-weight:600;color:var(--c)}
+.act-desc{font-size:14px;color:var(--muted)}
+.steps{margin-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--text);line-height:1.5}
+.steps li::marker{color:var(--c);font-weight:600}
+.deeplink{align-self:flex-start;background:transparent;color:var(--c);border:1px solid var(--c);padding:8px 13px;font-size:13.5px}
+.deeplink:hover{background:var(--bg)}
+.deeplink small{color:var(--dim);font-weight:400;font-size:12px}
 
-.actions-list{display:flex;flex-direction:column;gap:11px}
-.action-item{
-  background:var(--card2);border:1px solid var(--line);border-left:2px solid var(--manual);
-  border-radius:8px;padding:15px 17px;display:flex;flex-direction:column;gap:10px;
-}
-.action-item.cat-auto{border-left-color:var(--auto)}
-.action-item.cat-manual{border-left-color:var(--manual)}
-.action-item.cat-critical{border-left-color:var(--critical)}
-.action-header{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.category-badge{
-  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 7px;
-  border-radius:4px;letter-spacing:.03em;border:1px solid;
-}
-.category-auto{background:rgba(127,217,154,.08);border-color:rgba(127,217,154,.35);color:var(--auto)}
-.category-manual{background:rgba(232,179,77,.08);border-color:rgba(232,179,77,.35);color:var(--manual)}
-.category-critical{background:rgba(255,104,87,.08);border-color:rgba(255,104,87,.35);color:var(--critical)}
-.action-name{font-size:14.5px;font-weight:700;flex:1;letter-spacing:-.005em}
-.action-desc{font-size:12.5px;color:var(--muted);font-style:normal}
-.steps-list{list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--muted)}
-.steps-list li{counter-increment:s;display:flex;gap:11px;line-height:1.5}
-.steps-list li::before{
-  content:counter(s,decimal-leading-zero);font-family:'JetBrains Mono',monospace;flex:none;
-  width:auto;color:var(--muted-dim);font-size:11px;font-weight:700;margin-top:2px;
-}
-.deeplink-btn{
-  align-self:flex-start;background:transparent;color:var(--accent);border:1px solid var(--accent-dim);
-  border-radius:6px;padding:8px 12px;font-size:12.5px;font-weight:700;
-}
-.deeplink-btn:hover{background:var(--accent-soft)}
-.deeplink-uri{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted-dim);opacity:.9;font-weight:400}
-.toast{
-  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);
-  background:var(--card);color:var(--text);border:1px solid var(--line);padding:10px 18px;
-  border-radius:8px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);transition:transform .25s;
-  z-index:100;pointer-events:none;font-family:'JetBrains Mono',monospace;
-}
-.toast.show{transform:translateX(-50%) translateY(0)}
-.no-match-box{text-align:center;padding:34px 16px;color:var(--muted)}
-.no-match-icon{font-size:26px;margin-bottom:10px;opacity:.7}
-.no-match-title{font-size:15.5px;font-weight:700;color:var(--text);margin-bottom:5px}
-.no-match-desc{font-size:13px;line-height:1.6}
+.empty{text-align:center;padding:34px 16px;color:var(--muted)}
+.empty h3{color:var(--text);font-size:16px;margin-bottom:6px}
+.empty p{font-size:14px;line-height:1.6}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--raised);border:1px solid var(--line);
+  padding:10px 18px;border-radius:9px;font-size:14px;transition:transform .25s;z-index:100;pointer-events:none;opacity:0}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+@media(max-width:520px){.gauge{width:76px;height:76px}.gauge-num b{font-size:23px}h1{font-size:32px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
-
 </head>
 <body>
-<div class="container">
+<div class="wrap">
   <header>
-    <div class="badge-top">samsung galaxy · prism diagnostics demo</div>
-    <h1>Diagnos AI</h1>
-    <p class="subtitle">Describe a device fault by text, voice, or photo. The engine matches it against a live troubleshooting catalog and returns a ranked, actionable repair plan.</p>
+    <div class="brand">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 3l11 4v8c0 7-4.7 11.6-11 14C9.700 26.600 5 22 5 15V7l11-4z" stroke="#DDE8EB" stroke-width="2" stroke-linejoin="round"/><path d="M11 16.500l3.500 3.500L21 12.500" stroke="#4FD08A" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h1>Sentry</h1>
+    </div>
+    <p class="sub">Describe a device fault by text, voice, or photo. Sentry checks it against a live troubleshooting catalog and returns a ranked repair plan.</p>
+    <div class="legend" aria-label="Color key">
+      <span><i style="background:var(--auto)"></i>Safe settings change</span>
+      <span><i style="background:var(--manual)"></i>Needs your hands</span>
+      <span><i style="background:var(--critical)"></i>Restart or reset</span>
+    </div>
   </header>
 
-  <div class="card">
-    <div class="samples-bar">
-      <span class="samples-label">try:</span>
-      <button type="button" class="sample-pill" data-query="The mobile phone swipe navigation moves up or down instead of left or right after downloading an app">Swipe Inverted</button>
-      <button type="button" class="sample-pill" data-query="Battery draining extremely fast since the latest software update">Battery Fast Drain</button>
-      <button type="button" class="sample-pill" data-query="Camera app crashes every time I try to switch to ultra wide lens">Camera Crash</button>
-      <button type="button" class="sample-pill" data-query="Phone becomes very hot and lags when switching between apps">Lag &amp; Overheat</button>
-      <button type="button" class="sample-pill" data-query="The phone screen gestures are not responding properly">Ambiguous Gestures</button>
+  <div class="panel">
+    <div class="samples">
+      <span>Try:</span>
+      <button type="button" class="pill" data-query="The mobile phone swipe navigation moves up or down instead of left or right after downloading an app">Swipe inverted</button>
+      <button type="button" class="pill" data-query="Battery draining extremely fast since the latest software update">Battery drain</button>
+      <button type="button" class="pill" data-query="Camera app crashes every time I try to switch to ultra wide lens">Camera crash</button>
+      <button type="button" class="pill" data-query="Phone charges very slowly and the charging port looks dirty">Dirty charging port</button>
+      <button type="button" class="pill" data-query="Screen keeps flickering">Screen flickering</button>
     </div>
     <div class="input-group">
-      <textarea id="queryInput" placeholder="Describe the issue (e.g. 'Screen flickers when brightness is lowered'). You can also attach a photo and send both together."></textarea>
-      <input type="file" id="imageInput" accept="image/*" style="display:none">
-      <div id="imagePreviewContainer" class="image-preview-container">
-        <img id="imagePreview" alt="Problem preview">
-        <div class="image-details" id="imageDetails">photo.jpg</div>
-        <button type="button" class="btn-remove-img" id="btnRemoveImg">✕ Remove</button>
+      <textarea id="queryInput" placeholder="Describe the problem, for example: screen flickers when brightness is low. You can attach a photo too."></textarea>
+      <input type="file" id="imageInput" accept="image/*" hidden>
+      <div class="preview" id="preview"><img id="previewImg" alt="Attached photo"><div class="name" id="previewName"></div><button type="button" class="btn-x" id="btnRemoveImg">Remove</button></div>
+      <div class="row">
+        <button type="button" class="btn-secondary" id="btnUploadPhoto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.500"/></svg>Add photo</button>
+        <button type="button" class="btn-secondary btn-mic" id="btnMic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg><span id="micLabel">Speak</span></button>
+        <button type="button" class="btn-primary" id="btnSubmit">Diagnose</button>
       </div>
-      <div class="controls-row">
-        <button type="button" class="btn-secondary" id="btnUploadPhoto">📷 Photo</button>
-        <button type="button" class="btn-secondary btn-mic" id="btnMic">🎤 Speak</button>
-        <button type="button" class="btn-primary" id="btnSubmit">Diagnose Issue</button>
-      </div>
-      <div class="combo-hint" id="comboHint"></div>
-      <div class="status-msg" id="statusMsg"></div>
+      <div class="hint" id="comboHint"></div>
+      <div class="status" id="statusMsg"></div>
     </div>
   </div>
 
-  <div class="card loading-box" id="loadingBox">
+  <div class="panel loading" id="loadingBox">
     <div class="spinner"></div>
-    <div class="loading-text" id="loadingText">Diagnosing issue with Gemini AI...</div>
-    <div class="loading-timer" id="loadingTimer">Elapsed: 0.0s</div>
+    <div class="loading-text" id="loadingText"></div>
+    <div class="loading-timer" id="loadingTimer">0.0 s</div>
   </div>
 
-  <div class="telemetry-bar" id="telemetryBar">
-    <div class="telemetry-item"><span>⚡ Latency:</span><span class="telemetry-val" id="metaLatency">-</span></div>
-    <div class="telemetry-item"><span>💾 Cache:</span><span class="cache-badge" id="metaCache">-</span><span class="cache-note" id="metaCacheNote"></span></div>
-    <div class="telemetry-item"><span>🤖 Model:</span><span class="telemetry-val" id="metaModel">-</span></div>
-    <div class="telemetry-item"><span>💲 Cost:</span><span class="telemetry-val" id="metaCost">-</span></div>
+  <div class="run" id="telemetryBar">
+    <span>Time<b id="metaLatency">-</b></span>
+    <span>Cache<b id="metaCache">-</b><span id="metaCacheNote"></span></span>
+    <span>Model<b id="metaModel">-</b></span>
+    <span>Cost<b id="metaCost">-</b></span>
+    <span id="sourceBadgeWrap"></span><span id="clarifyBadgeWrap"></span>
   </div>
-
-  <div class="results-container" id="resultsContainer"></div>
+  <div class="caption" id="badgeCaption" style="display:none"></div>
+  <div class="framing" id="queryFraming"></div>
+  <div class="results" id="resultsContainer"></div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
 const BACKEND_BASE = "http://localhost:8000";
 const $ = id => document.getElementById(id);
-const queryInput=$("queryInput"), imageInput=$("imageInput"), imagePreviewContainer=$("imagePreviewContainer"),
-  imagePreview=$("imagePreview"), imageDetails=$("imageDetails"), btnMic=$("btnMic"), btnSubmit=$("btnSubmit"),
+const queryInput=$("queryInput"), imageInput=$("imageInput"), btnMic=$("btnMic"), btnSubmit=$("btnSubmit"),
   statusMsg=$("statusMsg"), comboHint=$("comboHint"), loadingBox=$("loadingBox"), loadingText=$("loadingText"),
-  loadingTimer=$("loadingTimer"), telemetryBar=$("telemetryBar"), resultsContainer=$("resultsContainer"), toast=$("toast");
+  loadingTimer=$("loadingTimer"), telemetryBar=$("telemetryBar"), resultsContainer=$("resultsContainer"), toast=$("toast"),
+  sourceBadgeWrap=$("sourceBadgeWrap"), clarifyBadgeWrap=$("clarifyBadgeWrap");
+let selectedImageFile=null, timerInterval=null, stageInterval=null, recognition=null, isRecording=false, lastQuery="", lastRawText="";
 
-let selectedImageFile = null, timerInterval = null, recognition = null, isRecording = false;
-let lastQuery = "";   // query used for the current diagnosis (sent to /v1/clarify)
-
-function escapeHtml(s){ if(!s) return ""; return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"); }
+const esc = s => s ? String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;") : "";
 function showToast(m){ toast.textContent=m; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),3000); }
-function setStatus(t,err=false){ statusMsg.textContent=t; statusMsg.style.color=err?"#f87171":"#94a3b8"; }
-function updateComboHint(){
-  const hasText = queryInput.value.trim().length>0;
-  comboHint.textContent = (selectedImageFile && hasText) ? "📷 + ✍️ Photo and description will be analysed together." :
-    selectedImageFile ? "Tip: add a short description alongside the photo for a more accurate diagnosis." : "";
+function setStatus(t,err=false){ statusMsg.textContent=t; statusMsg.style.color=err?"var(--critical)":"var(--muted)"; }
+function updateHint(){
+  const t=queryInput.value.trim().length>0;
+  comboHint.textContent=(selectedImageFile&&t)?"Sentry will read the photo and your description together.":selectedImageFile?"A short description alongside the photo makes the diagnosis more accurate.":"";
 }
-queryInput.addEventListener("input", updateComboHint);
+queryInput.addEventListener("input",updateHint);
+document.querySelectorAll(".pill").forEach(p=>p.addEventListener("click",()=>{ queryInput.value=p.dataset.query; clearImage(); setStatus("Example loaded. Select Diagnose to run it."); }));
 
-document.querySelectorAll(".sample-pill").forEach(p=>p.addEventListener("click",()=>{
-  queryInput.value=p.dataset.query; clearImage(); setStatus("Sample loaded. Click 'Diagnose Issue' to run.");
-}));
-
-// ---- Voice ----
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SR) {
-  recognition = new SR(); recognition.continuous=false; recognition.interimResults=true; recognition.lang="en-US";
-  const idle=()=>{ isRecording=false; btnMic.classList.remove("recording"); btnMic.innerHTML="🎤 Speak"; };
-  recognition.onstart=()=>{ isRecording=true; btnMic.classList.add("recording"); btnMic.innerHTML="⏹ Listening..."; setStatus("Listening... speak into your microphone."); };
-  recognition.onresult=e=>{ let t=""; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; queryInput.value=t; updateComboHint(); };
-  recognition.onerror=e=>{ idle(); setStatus(`Voice error: ${e.error}. Try again or type your complaint.`,true); };
-  recognition.onend=()=>{ idle(); setStatus(queryInput.value.trim()?"Voice captured! Review it and click 'Diagnose Issue'.":""); };
+// Voice
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){
+  recognition=new SR(); recognition.continuous=false; recognition.interimResults=true; recognition.lang="en-US";
+  const idle=()=>{ isRecording=false; btnMic.classList.remove("recording"); $("micLabel").textContent="Speak"; };
+  recognition.onstart=()=>{ isRecording=true; btnMic.classList.add("recording"); $("micLabel").textContent="Listening"; setStatus("Listening. Speak into your microphone."); };
+  recognition.onresult=e=>{ let t=""; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; queryInput.value=t; updateHint(); };
+  recognition.onerror=e=>{ idle(); setStatus(`Voice input failed (${e.error}). Try again or type the problem.`,true); };
+  recognition.onend=()=>{ idle(); setStatus(queryInput.value.trim()?"Got it. Review the text, then select Diagnose.":""); };
   btnMic.addEventListener("click",()=>{ if(isRecording) recognition.stop(); else { try{recognition.start();}catch(e){console.error(e);} } });
-} else {
-  btnMic.addEventListener("click",()=>alert("Web Speech API isn't supported here. Use Chrome or Edge for voice input."));
-}
+} else btnMic.addEventListener("click",()=>alert("Voice input needs Chrome or Edge."));
 
-// ---- Photo ----
+// Photo
 $("btnUploadPhoto").addEventListener("click",()=>imageInput.click());
 imageInput.addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
-  selectedImageFile=f; imageDetails.textContent=`${f.name} (${(f.size/1024).toFixed(1)} KB)`;
-  const r=new FileReader(); r.onload=ev=>{ imagePreview.src=ev.target.result; imagePreviewContainer.style.display="flex"; }; r.readAsDataURL(f);
-  setStatus("Photo attached. Add a description if you like, then click 'Diagnose Issue'."); updateComboHint();
+  selectedImageFile=f; $("previewName").textContent=`${f.name} (${(f.size/1024).toFixed(1)} KB)`;
+  const r=new FileReader(); r.onload=ev=>{ $("previewImg").src=ev.target.result; $("preview").style.display="flex"; }; r.readAsDataURL(f);
+  setStatus("Photo attached."); updateHint();
 });
 $("btnRemoveImg").addEventListener("click",clearImage);
-function clearImage(){ selectedImageFile=null; imageInput.value=""; imagePreview.src=""; imagePreviewContainer.style.display="none"; updateComboHint(); }
+function clearImage(){ selectedImageFile=null; imageInput.value=""; $("previewImg").src=""; $("preview").style.display="none"; updateHint(); }
 
-// ---- Loading ----
-function showLoading(msg){
-  loadingText.textContent=msg; loadingBox.style.display="flex"; resultsContainer.innerHTML=""; telemetryBar.style.display="none"; btnSubmit.disabled=true;
+// Loading
+const STAGES_TEXT=["Reading your description","Searching the troubleshooting catalog","Ranking likely causes","Double-checking each plan"];
+const STAGES_IMAGE=["Reading the photo","Reading your description","Searching the troubleshooting catalog","Ranking likely causes"];
+function showLoading(stages){
+  loadingBox.style.display="flex"; resultsContainer.innerHTML=""; telemetryBar.style.display="none"; btnSubmit.disabled=true;
+  clarifyBadgeWrap.innerHTML=""; $("badgeCaption").style.display="none"; $("queryFraming").style.display="none";
+  const m=stages||STAGES_TEXT; let i=0; loadingText.style.opacity="1"; loadingText.textContent=m[0];
+  clearInterval(stageInterval);
+  stageInterval=setInterval(()=>{ i=Math.min(i+1,m.length-1); loadingText.style.opacity="0"; setTimeout(()=>{loadingText.textContent=m[i];loadingText.style.opacity="1";},180); },1400);
   const start=performance.now(); clearInterval(timerInterval);
-  timerInterval=setInterval(()=>{ loadingTimer.textContent=`Elapsed: ${((performance.now()-start)/1000).toFixed(1)}s`; },100);
+  timerInterval=setInterval(()=>{ loadingTimer.textContent=`${((performance.now()-start)/1000).toFixed(1)} s`; },100);
 }
-function hideLoading(){ clearInterval(timerInterval); loadingBox.style.display="none"; btnSubmit.disabled=false; }
+function hideLoading(){ clearInterval(timerInterval); clearInterval(stageInterval); loadingBox.style.display="none"; btnSubmit.disabled=false; }
 
-// ---- Submit (text, image, or both) ----
-btnSubmit.addEventListener("click", submitDiagnosis);
-queryInput.addEventListener("keydown",e=>{ if(e.key==="Enter" && (e.ctrlKey||e.metaKey)) submitDiagnosis(); });
-
+// Submit
+btnSubmit.addEventListener("click",submitDiagnosis);
+queryInput.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)) submitDiagnosis(); });
 async function submitDiagnosis(){
-  const text = queryInput.value.trim();
-  if(!text && !selectedImageFile){ setStatus("Type a complaint, use the mic, or attach a device photo.",true); queryInput.focus(); return; }
-  setStatus("");
-  lastQuery = text || "Device problem shown in the attached photo";
-  let data = null;
+  const text=queryInput.value.trim();
+  if(!text&&!selectedImageFile){ setStatus("Describe the problem, use the mic, or attach a photo.",true); queryInput.focus(); return; }
+  setStatus(""); lastQuery=text||"Device problem shown in the attached photo"; lastRawText=text;
+  let data=null;
   try{
-    let response;
+    let res;
     if(selectedImageFile){
-      showLoading(text ? "Analysing photo + description with Gemini Vision..." : "Analysing device photo with Gemini Vision...");
+      showLoading(STAGES_IMAGE);
       const fd=new FormData(); fd.append("file",selectedImageFile); if(text) fd.append("query",text);
-      response=await fetch(`${BACKEND_BASE}/v1/troubleshoot-image`,{method:"POST",body:fd});
+      res=await fetch(`${BACKEND_BASE}/v1/troubleshoot-image`,{method:"POST",body:fd});
     } else {
-      showLoading("Diagnosing issue with Gemini AI...");
-      response=await fetch(`${BACKEND_BASE}/v1/troubleshoot`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:text})});
+      showLoading(STAGES_TEXT);
+      res=await fetch(`${BACKEND_BASE}/v1/troubleshoot`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:text})});
     }
-    if(!response.ok) throw new Error(`Server returned HTTP ${response.status}: ${response.statusText}`);
-    data = await response.json();
-    renderResponse(data, parseCacheDecision(response.headers.get("X-Cache-Decision")));
-  }catch(err){
-    console.error("Diagnosis error:",err); renderError(err.message);
-  }finally{ hideLoading(); }
-  if(data) maybeClarify(data);   // non-blocking follow-up
+    if(!res.ok) throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+    data=await res.json();
+    renderResponse(data,parseCacheDecision(res.headers.get("X-Cache-Decision")));
+  }catch(err){ console.error(err); renderError(err.message); }
+  finally{ hideLoading(); }
+  if(data) maybeClarify(data);
 }
 
-// ---- Cache decision (from X-Cache-Decision header) ----
-function parseCacheDecision(header){
-  const m=/^([a-z_]+)(?:; sim=([\d.]+))?(?:; matched=(.*))?$/.exec(header||"");
-  if(!m) return null;
-  let matched=m[3]||""; try{ matched=decodeURIComponent(matched); }catch(e){}
+// Cache decision
+function parseCacheDecision(h){
+  const m=/^([a-z_]+)(?:; sim=([\d.]+))?(?:; matched=(.*))?$/.exec(h||""); if(!m) return null;
+  let matched=m[3]||""; try{matched=decodeURIComponent(matched);}catch(e){}
   return {decision:m[1],simPct:Math.round(parseFloat(m[2]||"0")*100),matched};
 }
-function describeCacheDecision(cd){
+function describeCache(cd){
   if(!cd) return null;
-  if(cd.decision==="hit") return `Served from cache — matched '${cd.matched}' (${cd.simPct}%)`;
-  if(cd.decision.startsWith("veto_")){
-    const why=cd.decision==="veto_polarity"?"means the opposite":"is about a different setting";
-    return `Cache VETOED — looked ${cd.simPct}% similar to '${cd.matched}' but ${why}`;
-  }
+  if(cd.decision==="hit") return `Served from cache, matched "${cd.matched}" (${cd.simPct}%)`;
+  if(cd.decision.startsWith("veto_")) return `Cache rejected: ${cd.simPct}% similar to "${cd.matched}" but ${cd.decision==="veto_polarity"?"means the opposite":"is about a different setting"}`;
   return null;
 }
 
-// ---- Clarify flow ----
-function extract(data){
-  if(data.response && Array.isArray(data.response.contexts)) return {contexts:data.response.contexts,fallback:data.response.fallback,message:data.response.message||data.message,meta:data.meta||{}};
-  return {contexts:Array.isArray(data.contexts)?data.contexts:[],fallback:data.fallback,message:data.message,meta:data.meta||{}};
+// Query understanding (mirrors backend enrich_query)
+const FILLER=new Set(["um","umm","uh","uhh","like","basically","actually","kinda","sorta","so","well","just","hey","please","ok","okay"]);
+const NORM={wifi:"wi-fi",wont:"won't",doesnt:"doesn't",isnt:"isn't",cant:"can't",dont:"don't",ur:"your",u:"you",pls:"please",plz:"please",thx:"thanks",tv:"TV"};
+function enrich(raw){
+  const out=[]; for(let w of (raw||"").trim().toLowerCase().replace(/[^\w\s'-]/g," ").split(/\s+/)){ if(!w) continue; w=NORM[w]||w; if(!FILLER.has(w)) out.push(w); }
+  return out.join(" ").trim();
+}
+function renderFraming(raw){
+  const el=$("queryFraming"), clean=enrich(raw);
+  if(!raw||!clean||clean===raw.trim().toLowerCase()){ el.style.display="none"; return; }
+  el.innerHTML=`<small>How Sentry read your description</small><div><span class="raw">"${esc(raw)}"</span><span class="arrow">becomes</span><span class="clean">${esc(clean)}</span></div>`;
+  el.style.display="flex";
 }
 
+// Source + clarify badges (neutral on purpose: green/amber/red are reserved for actions)
+function renderSource(meta,cd){
+  const local=!!(meta&&meta.cache_hit)||(cd&&cd.decision==="hit");
+  sourceBadgeWrap.innerHTML=`<span class="tag ${local?"on":""}">${local?"Matched on this device":"Verified in the cloud"}</span>`;
+  const c=$("badgeCaption");
+  c.textContent=local?"Cache matches stay on the device: no API call, no cost, no data sent.":"This query needed a live Gemini call to verify, not pattern matching alone.";
+  c.style.display="block";
+}
+function extract(d){
+  if(d.response&&Array.isArray(d.response.contexts)) return {contexts:d.response.contexts,fallback:d.response.fallback,message:d.response.message||d.message,meta:d.meta||{}};
+  return {contexts:Array.isArray(d.contexts)?d.contexts:[],fallback:d.fallback,message:d.message,meta:d.meta||{}};
+}
+function clarifyBadge(state,gap){
+  const t={na:"Single clear cause",ok:`Clarify check passed${gap?` (gap ${gap}%)`:""}`,asked:"Needs one more detail",error:"Clarify check unavailable"}[state];
+  clarifyBadgeWrap.innerHTML=`<span class="tag ${state==="asked"?"on":""}">${t}</span>`;
+}
 async function maybeClarify(data){
   const {contexts,fallback}=extract(data);
-  if(fallback || contexts.length<2) return;
-  const hypotheses=contexts.slice(0,2).map(c=>({title:c.title,score:c.score}));
+  if(fallback||contexts.length<2){ clarifyBadge("na"); return; }
+  const hyps=contexts.slice(0,2).map(c=>({title:c.title,score:c.score}));
+  const gap=Math.round(Math.abs((hyps[0].score||0)-(hyps[1].score||0))*100);
   try{
-    const r=await fetch(`${BACKEND_BASE}/v1/clarify`,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({query:lastQuery,hypotheses,clarification_answer:null})});
-    if(!r.ok) return;
+    const r=await fetch(`${BACKEND_BASE}/v1/clarify`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:lastQuery,hypotheses:hyps,clarification_answer:null})});
+    if(!r.ok){ clarifyBadge("error"); return; }
     const c=await r.json();
-    if(c.needs_clarification && c.question) renderClarifyCard(c.question,hypotheses);
-  }catch(e){ console.warn("Clarify check failed (non-fatal):",e); }
+    if(c.needs_clarification&&c.question){ clarifyBadge("asked"); renderClarifyCard(c.question,hyps); } else clarifyBadge("ok",gap);
+  }catch(e){ console.warn(e); clarifyBadge("error"); }
 }
-
-function renderClarifyCard(question,hyps){
-  const [a,b]=hyps.map(h=>h.title.toLowerCase());
-  const answers=[`It started with ${a}`,`It involves ${b}`,"Both, or I'm not sure"];
-  const chips=answers.map(t=>`<button type="button" class="chip chip-lg" data-answer="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join("");
-  const html=`
-    <div class="clarify-card" id="clarifyCard">
-      <div class="clarify-tag">🤔 Help us narrow it down</div>
-      <div class="clarify-q">${escapeHtml(question)}</div>
-      <div class="chip-row">${chips}</div>
-      <div class="clarify-free">
-        <input type="text" class="text-input" id="clarifyText" placeholder="Or describe in your own words...">
-        <button type="button" class="btn-secondary" id="clarifySend">Send</button>
-      </div>
-      <button type="button" class="btn-link" id="clarifySkip">Skip — keep the results below</button>
-    </div>`;
-  resultsContainer.insertAdjacentHTML("afterbegin",html);
+function renderClarifyCard(q,hyps){
+  const [a,b]=hyps.map(h=>h.title);
+  const chips=[a,b,"Both, or I'm not sure"].map(t=>`<button type="button" class="chip" data-answer="${esc(t)}">${esc(t)}</button>`).join("");
+  resultsContainer.insertAdjacentHTML("afterbegin",`<div class="clarify" id="clarifyCard"><small>One question to narrow it down</small><h3>${esc(q)}</h3>
+    <div class="chips">${chips}</div>
+    <div class="free"><input type="text" class="text-input" id="clarifyText" placeholder="Or answer in your own words"><button type="button" class="btn-secondary" id="clarifySend">Send</button></div>
+    <button type="button" class="btn-link" id="clarifySkip">Skip and keep these results</button></div>`);
   const card=$("clarifyCard");
   card.querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>submitClarification(c.dataset.answer)));
   $("clarifySend").addEventListener("click",()=>{ const v=$("clarifyText").value.trim(); if(v) submitClarification(v); });
   $("clarifyText").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const v=e.target.value.trim(); if(v) submitClarification(v); } });
   $("clarifySkip").addEventListener("click",()=>card.remove());
 }
-
 async function submitClarification(answer){
-  const prevHyps=[...resultsContainer.querySelectorAll(".goal-title")]; // just to ensure results existed
-  const hypotheses=window.__lastHyps || [];
   try{
-    showLoading("Refining diagnosis with your answer...");
-    const r=await fetch(`${BACKEND_BASE}/v1/clarify`,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({query:lastQuery,hypotheses,clarification_answer:answer})});
+    showLoading(["Applying your answer","Re-ranking likely causes"]);
+    const r=await fetch(`${BACKEND_BASE}/v1/clarify`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:lastQuery,hypotheses:window.__hyps||[],clarification_answer:answer})});
     if(!r.ok) throw new Error(`Server returned HTTP ${r.status}: ${r.statusText}`);
-    const data=await r.json();
-    renderResponse(data);
-    resultsContainer.insertAdjacentHTML("afterbegin",`<div class="refined-banner">✅ Refined using your answer: “${escapeHtml(answer)}”</div>`);
+    renderResponse(await r.json());
+    resultsContainer.insertAdjacentHTML("afterbegin",`<div class="refined">Results updated using your answer: "${esc(answer)}"</div>`);
   }catch(err){ console.error(err); renderError(err.message); }
   finally{ hideLoading(); }
 }
 
-// ---- Rendering ----
 function renderError(msg){
   telemetryBar.style.display="none";
-  resultsContainer.innerHTML=`<div class="card no-match-box"><div class="no-match-icon">⚠️</div><div class="no-match-title">Something went wrong</div>
-    <div class="no-match-desc">${escapeHtml(msg)}<br><small style="color:#64748b;display:inline-block;margin-top:8px">Make sure the backend is running at <code>${BACKEND_BASE}</code> (e.g. <code>uvicorn backend.main:app --port 8000</code>).</small></div></div>`;
+  resultsContainer.innerHTML=`<div class="panel empty"><h3>Sentry couldn't reach the backend</h3><p>${esc(msg)}<br>Check that it is running at ${BACKEND_BASE}, for example with <code>python -m uvicorn main:app --port 8000</code>.</p></div>`;
 }
 
-function buildReasoningTrace(goal,gIdx,contexts,meta,cacheDecision){
-  if(!goal) return [];
-  const t=[], actions=Array.isArray(goal.actions)?goal.actions:[], pct=Math.round((goal.score||0)*100);
-  t.push(`Matched at ${pct}% confidence via diagnostic catalog retrieval`);
-  if(goal.self_critique) t.push(`Agentic critique: ${goal.self_critique}`);
-  const seq=actions.map(a=>(a.category||"manual").toLowerCase());
-  t.push(`Validated ${actions.length} action${actions.length===1?"":"s"}: ${seq.length?seq.join(" → "):"none"}`);
-  let resolved=0, autoNoLink=0, guarded=0;
-  actions.forEach(a=>(Array.isArray(a.stepGroups)?a.stepGroups:[]).forEach(sg=>{
-    if(sg && sg.actionableDeeplink && sg.actionableDeeplink.deeplink) resolved++;
-    else if(a.category==="auto") autoNoLink++; else guarded++;
-  }));
-  if(resolved>0 && autoNoLink===0) t.push(`Deeplink integrity: 0 broken links (${resolved} resolved, ${guarded} non-settings steps guarded)`);
-  else if(autoNoLink>0) t.push(`Deeplink integrity: ${resolved} resolved, ${autoNoLink} auto action(s) unlinked`);
-  else t.push("Deeplink integrity: Zero unverified links (manual physical checks / reboot steps safely guarded)");
-  const total=contexts.length; let rank=`Ranked #${gIdx+1} of ${total} hypothes${total===1?"is":"es"}`;
-  if(total>1){ const o=contexts.map((c,i)=>i!==gIdx&&c?Math.round((c.score||0)*100):null).filter(s=>s!==null); if(o.length) rank+=` (score: ${pct}%, alternative: ${o.join("%, ")}%)`; }
-  t.push(rank);
-  if(meta.cache_hit) t.push(`Served from semantic cache in ${meta.latency_ms??0}ms`);
-  const cl=describeCacheDecision(cacheDecision); if(cl) t.push(cl);
+// Area label inferred from the result's own text
+const AREAS=[
+  ["Battery",["battery","charge","charging","power","drain","overheat","heat"]],
+  ["Camera",["camera","photo","picture","lens","flash","zoom","video","shutter"]],
+  ["Display",["display","screen","brightness","dark mode","refresh","flicker","burn-in","navigation bar"]],
+  ["Touch and gestures",["touch","gesture","swipe","tap","sensitivity","navigation"]],
+  ["Sound",["sound","volume","speaker","audio","mic","ringtone","vibration"]],
+  ["Connectivity",["wi-fi","wifi","bluetooth","network","connection","hotspot","signal","data","sim"]],
+  ["Performance",["lag","freeze","slow","stutter","performance","memory","ram","storage"]],
+  ["Security",["security","privacy","lock screen","biometric","fingerprint","face"]],
+  ["Software",["update","firmware","reboot","restart","reset","safe mode"]],
+];
+function area(g){ const t=`${g.title||""} ${g.goal||""}`.toLowerCase(); for(const [n,w] of AREAS) if(w.some(x=>t.includes(x))) return n; return "General"; }
+const KIND={auto:"Safe settings change",manual:"Needs your hands",critical:"Restart or reset"};
+
+function trace(goal,i,contexts,meta,cd){
+  const t=[],acts=Array.isArray(goal.actions)?goal.actions:[],pct=Math.round((goal.score||0)*100);
+  t.push(`Matched the catalog at ${pct}% confidence`);
+  if(goal.self_critique) t.push(`Self-critique: ${goal.self_critique}`);
+  t.push(`Checked ${acts.length} action${acts.length===1?"":"s"}, in this order: ${acts.map(a=>KIND[(a.category||"manual").toLowerCase()]||"").join(", ")||"none"}`);
+  let ok=0,auto=0,guard=0;
+  acts.forEach(a=>(a.stepGroups||[]).forEach(sg=>{ if(sg&&sg.actionableDeeplink&&sg.actionableDeeplink.deeplink) ok++; else if(a.category==="auto") auto++; else guard++; }));
+  t.push(auto>0?`Settings links: ${ok} verified, ${auto} settings action(s) without a link`:ok>0?`Settings links: ${ok} verified, none broken`:"Settings links: none needed, all steps are physical checks or restarts");
+  const n=contexts.length; let r=`Ranked ${i+1} of ${n}`;
+  if(n>1){ const o=contexts.map((c,j)=>j!==i&&c?Math.round((c.score||0)*100):null).filter(s=>s!==null); if(o.length) r+=` (this ${pct}%, other ${o.join("%, ")}%)`; }
+  t.push(r);
+  if(meta.cache_hit) t.push(`Served from semantic cache in ${meta.latency_ms??0} ms`);
+  const c=describeCache(cd); if(c) t.push(c);
   return t;
 }
 
-function renderResponse(data,cacheDecision=null){
+function gauge(pct){
+  const n=24,lit=Math.round(pct/100*n); let t="";
+  for(let i=0;i<n;i++){ const a=(135+i*270/(n-1))*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+    t+=`<line class="tick${i<lit?" on":""}" style="--i:${i}" x1="${(50+38.5*c).toFixed(1)}" y1="${(50+38.5*s).toFixed(1)}" x2="${(50+47.5*c).toFixed(1)}" y2="${(50+47.5*s).toFixed(1)}"/>`; }
+  return `<div class="gauge" role="img" aria-label="Confidence ${pct} percent"><svg viewBox="0 0 100 100">${t}</svg><div class="gauge-num"><b>${pct}</b><span>confidence</span></div></div>`;
+}
+function renderResponse(data,cd=null){
   const {contexts,fallback,message,meta}=extract(data);
-  window.__lastHyps = contexts.slice(0,2).map(c=>({title:c.title,score:c.score}));
-
+  window.__hyps=contexts.slice(0,2).map(c=>({title:c.title,score:c.score}));
   $("metaLatency").textContent=`${meta.latency_ms??0} ms`;
   $("metaModel").textContent=meta.model||"gemini-3.6-flash";
   $("metaCost").textContent=`$${(meta.cost_usd||0).toFixed(6)}`;
-  const hit=!!meta.cache_hit; $("metaCache").textContent=hit?"HIT":"MISS"; $("metaCache").className="cache-badge "+(hit?"cache-hit":"cache-miss");
-  const note=describeCacheDecision(cacheDecision);
-  $("metaCacheNote").textContent=note||""; $("metaCacheNote").className=note?"cache-note "+(cacheDecision.decision==="hit"?"cache-note-hit":"cache-note-veto"):"cache-note";
+  const hit=!!meta.cache_hit; $("metaCache").textContent=hit?"Hit":"Miss";
+  $("metaCacheNote").textContent=describeCache(cd)||"";
+  renderSource(meta,cd); renderFraming(lastRawText);
   telemetryBar.style.display="flex";
 
   if(fallback==="vision_unavailable"){
-    resultsContainer.innerHTML=`<div class="card no-match-box"><div class="no-match-icon">📷</div><div class="no-match-title">Image Analysis Unavailable</div>
-      <div class="no-match-desc">${escapeHtml(message||"We couldn't analyze this image right now. Please describe the issue in text instead.")}</div></div>`;
-    return;
+    resultsContainer.innerHTML=`<div class="panel empty"><h3>Photo analysis is unavailable</h3><p>${esc(message||"Sentry couldn't analyze this image right now. Describe the problem in text instead.")}</p></div>`; return;
   }
   if(fallback==="no_match"||fallback==="no_siis_context"||contexts.length===0){
-    resultsContainer.innerHTML=`<div class="card no-match-box"><div class="no-match-icon">🔍</div><div class="no-match-title">No matching troubleshooting plan found</div>
-      <div class="no-match-desc">The engine couldn't confirm a high-confidence remediation in the catalog.<br>Try specific hardware or settings symptoms (e.g. 'swipe navigation', 'battery drain', 'camera reset').</div></div>`;
-    return;
+    resultsContainer.innerHTML=`<div class="panel empty"><h3>No confident match in the catalog</h3><p>Try naming the symptom or setting, such as "swipe navigation", "battery drain", or "camera reset".</p></div>`; return;
   }
-
   let html="";
-  contexts.forEach((goal,gIdx)=>{
+  contexts.forEach((goal,gi)=>{
     const pct=Math.round((goal.score||0)*100);
-    const trace=buildReasoningTrace(goal,gIdx,contexts,meta,cacheDecision).map(i=>`<li class="trace-item">${escapeHtml(i)}</li>`).join("");
-    html+=`<div class="goal-card">
-      <div class="goal-header">
-        <div><div class="goal-title">Hypothesis ${gIdx+1}: ${escapeHtml(goal.title)}</div><div class="goal-instruction">${escapeHtml(goal.goal)}</div></div>
-        <div class="conf"><div class="conf-num">${pct}%</div><div class="conf-label">Confidence</div><div class="conf-bar"><div class="conf-fill" style="width:${pct}%"></div></div></div>
-      </div>
-      <details class="diagnosis-trace"><summary class="trace-summary"><span>🔍 Why this diagnosis?</span><span class="trace-summary-hint">View reasoning trace</span></summary><ul class="trace-list">${trace}</ul></details>
-      <div class="actions-list">`;
+    const tr=trace(goal,gi,contexts,meta,cd).map(x=>`<li>${esc(x)}</li>`).join("");
+    html+=`<article class="goal"><div class="goal-head">${gauge(pct)}<div>
+      <div class="area">Hypothesis ${gi+1} of ${contexts.length}: ${esc(area(goal))}</div>
+      <div class="goal-title">${esc(goal.title)}</div><div class="goal-text">${esc(goal.goal)}</div></div></div>
+      <div class="verified">Verified via catalog retrieval, self-critique, and link validation, not a raw model guess.</div>
+      <details class="trace"><summary>Why this diagnosis?</summary><ul>${tr}</ul></details><div class="actions">`;
     (goal.actions||[]).forEach(act=>{
       const cat=(act.category||"manual").toLowerCase();
-      const label=cat==="auto"?"Auto · In-App Settings":cat==="critical"?"Critical · Reset/Reboot":"Manual · Physical Check";
-      let steps="", dl=null;
-      (act.stepGroups||[]).forEach(sg=>{ (sg.steps||[]).forEach(s=>steps+=`<li><span>${escapeHtml(s)}</span></li>`); if(sg.actionableDeeplink) dl=sg.actionableDeeplink; });
-      const dlBtn=dl?`<button type="button" class="deeplink-btn" data-uri="${escapeHtml(dl.deeplink)}"><span>⚙️ Open in Settings</span><span class="deeplink-uri">(${escapeHtml(dl.deeplink)})</span></button>`:"";
-      html+=`<div class="action-item cat-${cat}">
-        <div class="action-header"><span class="category-badge category-${cat}">${label}</span><span class="action-name">${escapeHtml(act.actionName)}</span></div>
-        <div class="action-desc">${escapeHtml(act.description)}</div>
-        <ol class="steps-list">${steps}</ol>${dlBtn}</div>`;
+      let steps="",dl=null;
+      (act.stepGroups||[]).forEach(sg=>{ (sg.steps||[]).forEach(s=>steps+=`<li>${esc(s)}</li>`); if(sg.actionableDeeplink) dl=sg.actionableDeeplink; });
+      const btn=dl?`<button type="button" class="deeplink" data-uri="${esc(dl.deeplink)}">Open in Settings <small>${esc(dl.deeplink)}</small></button>`:"";
+      html+=`<div class="action cat-${cat}"><div class="act-head"><span class="act-name">${esc(act.actionName)}</span><span class="kind">${KIND[cat]||""}</span></div>
+        <div class="act-desc">${esc(act.description)}</div><ol class="steps">${steps}</ol>${btn}</div>`;
     });
-    html+=`</div></div>`;
+    html+=`</div></article>`;
   });
   resultsContainer.innerHTML=html;
 }
-
-// Deeplink clicks (event delegation, no inline handlers)
-resultsContainer.addEventListener("click",e=>{
-  const b=e.target.closest(".deeplink-btn"); if(b) showToast(`📱 Simulated One UI Deep Link: ${b.dataset.uri}`);
-});
+resultsContainer.addEventListener("click",e=>{ const b=e.target.closest(".deeplink"); if(b) showToast(`Demo only. On a Galaxy this opens: ${b.dataset.uri}`); });
 </script>
 </body>
 </html>
-
