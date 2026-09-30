@@ -95,6 +95,23 @@ def test_label_match_ignores_path_steps_and_junk_entries():
     assert not {"DL-0294", "DL-0295"} & {d["id"] for d in retriever.indexed_docs}
 
 
+@pytest.mark.parametrize("description, expected", [
+    # The official sample's own descriptions are 9 and 12 words; our schema allows 5-7.
+    ("It will facilitate secure data transfer between your devices", "It will facilitate secure data transfer"),
+    ("It will help you locate the nearest TechCorp service center and schedule",
+     "It will help locate nearest TechCorp service"),
+    ("It will turn off the adaptive brightness feature", "It will turn off adaptive brightness feature"),
+])
+def test_long_descriptions_are_shortened_without_dangling_words(description, expected):
+    from schema import Action
+
+    short = main._shorten_description(description)
+    assert short == expected
+    assert 5 <= len(short.split()) <= 7
+    assert short.split()[-1].lower() not in main._DANGLING_END
+    Action(actionName="Test Action", description=short, category="manual", stepGroups=[{"steps": ["Step."]}])
+
+
 def test_sample_output_validates_against_official_schema():
     sample = json.loads((OFFICIAL_DIR / "sample_output.json").read_text())
     official_schema.ContextDeeplinkResponse(**sample["response"])

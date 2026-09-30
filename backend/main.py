@@ -721,6 +721,37 @@ def validate_one_action_one_screen(goal: Goal) -> None:
                     seen_subscreens[subscreen] = act.actionName
 
 
+_DESCRIPTION_FILLER = {
+    "the", "a", "an", "your", "you", "my", "all", "any", "that", "which",
+    "really", "just", "very", "also", "easily", "quickly", "simply",
+}
+_DANGLING_END = {
+    "and", "or", "to", "of", "for", "with", "between", "in", "on", "at", "from",
+    "by", "the", "a", "an", "your", "so", "that", "into", "across", "via",
+}
+
+
+def _shorten_description(desc: str, max_words: int = 7, min_words: int = 5) -> str:
+    """
+    Fit an over-long "It will ..." description into max_words without cutting mid-phrase:
+    drop filler words first, then cut and trim any dangling preposition/conjunction/article.
+    "It will facilitate secure data transfer between your devices" (9) ->
+    "It will facilitate secure data transfer" (6), not "... transfer between".
+    """
+    words = desc.split()
+    head, rest = words[:2], words[2:]
+    while len(head) + len(rest) > max_words:
+        filler = next((i for i in range(len(rest) - 1, -1, -1)
+                       if rest[i].lower().strip(".,;:") in _DESCRIPTION_FILLER), None)
+        if filler is None:
+            break
+        del rest[filler]
+    words = (head + rest)[:max_words]
+    while len(words) > min_words and words[-1].lower().strip(".,;:") in _DANGLING_END:
+        words.pop()
+    return " ".join(words).rstrip(",;:")
+
+
 def _normalize_and_validate_goal(data: Dict[str, Any]) -> Goal:
     """
     Applies programmatic auto-corrections (title sentence case, URL scrubbing,
@@ -746,7 +777,7 @@ def _normalize_and_validate_goal(data: Dict[str, Any]) -> Goal:
                     if len(words) < 5:
                         desc = f"{desc} to fix device"
                     elif len(words) > 7:
-                        desc = " ".join(words[:7])
+                        desc = _shorten_description(desc)
                     act["description"] = desc
 
                 if "stepGroups" in act and isinstance(act["stepGroups"], list):
