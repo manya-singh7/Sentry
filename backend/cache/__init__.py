@@ -107,6 +107,7 @@ def _reset_stats() -> None:
         "veto_polarity": 0,
         "veto_entity": 0,
         "veto_domain": 0,
+        "veto_device": 0,
         "errors": 0,
         "total_lookup_ms": 0.0,
         "stores": 0,
@@ -317,6 +318,14 @@ _DOMAIN_RULES: Dict[str, str] = {
     "performance": r"\b(?:lag\w*|freez\w*|froze|hang\w*|stutter\w*|sluggish|ram|memory|performance|crash\w*)\b",
 }
 
+# Device form factor. A tablet complaint must not be answered with a cached phone answer.
+_DEVICE_RULES: Dict[str, str] = {
+    "tablet": r"\b(?:tablet|tablets|tab)\b",
+    "foldable": r"\b(?:fold|folds|folding|foldable|flip)\b",
+    "phone": r"\b(?:phone|phones|smartphone|smartphones|handset)\b",
+    "tv": r"\b(?:tv|tvs|television)\b",
+}
+
 
 def _normalise(text: str) -> str:
     text = text.lower()
@@ -331,6 +340,7 @@ def extract_features(text: str) -> Dict[str, Any]:
     polarity: {axis: +1 | -1} (axes with mixed signals are dropped)
     entities: sorted list of target entities
     domains:  sorted list of battery / display / camera / performance
+    devices:  the first device named (tablet / foldable / phone / tv), as a 0- or 1-item list
     """
     norm = _normalise(text or "")
 
@@ -352,12 +362,27 @@ def extract_features(text: str) -> Dict[str, Any]:
         entities.discard("apps")
 
     domains = {name for name, pattern in _DOMAIN_RULES.items() if re.search(pattern, norm)}
+    # Only the first device named: in "my tablet screen stays blank ... from my Nexa X1 phone"
+    # the tablet has the problem; the phone is incidental.
+    first_device = min(
+        ((m.start(), name) for name, pattern in _DEVICE_RULES.items() for m in re.finditer(pattern, norm)),
+        default=None,
+    )
+    devices = {first_device[1]} if first_device else set()
 
-    return {"polarity": polarity, "entities": sorted(entities), "domains": sorted(domains)}
+    return {
+        "polarity": polarity,
+        "entities": sorted(entities),
+        "domains": sorted(domains),
+        "devices": sorted(devices),
+    }
 
 
 def veto_reason(a: Dict[str, Any], b: Dict[str, Any]) -> Optional[str]:
-    """Returns 'veto_polarity' / 'veto_entity' / 'veto_domain', or None if the match may be served."""
+    """
+    Returns 'veto_polarity' / 'veto_entity' / 'veto_domain' / 'veto_device',
+    or None if the match may be served.
+    """
     for axis, sign in a["polarity"].items():
         if axis in b["polarity"] and b["polarity"][axis] != sign:
             return "veto_polarity"
@@ -365,6 +390,11 @@ def veto_reason(a: Dict[str, Any], b: Dict[str, Any]) -> Optional[str]:
         return "veto_entity"
     if a["domains"] and b["domains"] and not set(a["domains"]) & set(b["domains"]):
         return "veto_domain"
+    # Like domains: only when both sides name a device, so "screen is blank" can still
+    # match "tablet screen is blank".
+    a_dev, b_dev = set(a.get("devices", [])), set(b.get("devices", []))
+    if a_dev and b_dev and not a_dev & b_dev:
+        return "veto_device"
     return None
 
 
@@ -415,7 +445,12 @@ def cache_lookup(query: str, threshold: Optional[float] = None) -> Tuple[Optiona
 
         q_vec = _embed([query.strip()])[0]
         with _store_lock:
-            sims = _matrix @ q_vec
+            # numpy 2.0 + macOS Accelerate raises spurious FP warnings for some matrix
+            # shapes even though the result is exact, so silence them and check instead.
+            with np.errstate(all="ignore"):
+                sims = _matrix @ q_vec
+            if not np.isfinite(sims).all():
+                raise FloatingPointError("non-finite cosine similarity")
             best = int(np.argmax(sims))
             similarity = float(sims[best])
             entry = _entries[_row_entry[best]]
@@ -465,6 +500,7 @@ def cache_stats() -> Dict[str, Any]:
             "veto_polarity": s["veto_polarity"],
             "veto_entity": s["veto_entity"],
             "veto_domain": s["veto_domain"],
+            "veto_device": s["veto_device"],
             "errors": s["errors"],
             "hit_rate": round(s["hits"] / lookups, 4) if lookups else 0.0,
             "avg_lookup_ms": round(s["total_lookup_ms"] / lookups, 2) if lookups else 0.0,
