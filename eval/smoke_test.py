@@ -64,10 +64,15 @@ def extract_contexts_and_fallback(resp_json: Dict[str, Any]) -> Tuple[List[Dict[
     return resp_json.get("contexts", []), resp_json.get("fallback")
 
 
-def run_smoke_tests(base_url: str = DEFAULT_BASE_URL) -> bool:
+# Free-tier Gemini allows 5 requests/minute: one per 12s, plus margin. 3s tripped 429s near the end.
+DEFAULT_DELAY_SECONDS = 13.0
+
+
+def run_smoke_tests(base_url: str = DEFAULT_BASE_URL, delay: float = DEFAULT_DELAY_SECONDS) -> bool:
     print("=" * 75)
     print("RUNNING LIVE END-TO-END SYSTEM SMOKE TESTS")
     print(f"Target Server: {base_url}")
+    print(f"Pacing: {delay:.0f}s between live requests")
     print("=" * 75)
 
     passed_count = 0
@@ -127,7 +132,7 @@ def run_smoke_tests(base_url: str = DEFAULT_BASE_URL) -> bool:
 
     for idx, (domain, query) in enumerate(domain_queries):
         if idx > 0:
-            time.sleep(3)
+            time.sleep(delay)
         try:
             start_t = time.perf_counter()
             r = requests.post(
@@ -176,7 +181,7 @@ def run_smoke_tests(base_url: str = DEFAULT_BASE_URL) -> bool:
     # -----------------------------------------------------------------------
     # Test 3: POST /v1/troubleshoot with off-domain/nonsense query
     # -----------------------------------------------------------------------
-    time.sleep(3)
+    time.sleep(delay)
     nonsense_query = "book me a flight to Paris"
     try:
         start_t = time.perf_counter()
@@ -213,7 +218,7 @@ def run_smoke_tests(base_url: str = DEFAULT_BASE_URL) -> bool:
     # -----------------------------------------------------------------------
     # Test 4: POST /v1/clarify without answer (close-scored hypotheses)
     # -----------------------------------------------------------------------
-    time.sleep(3)
+    time.sleep(delay)
     ambiguous_payload = {
         "query": "phone is acting up and draining battery",
         "hypotheses": [
@@ -253,7 +258,7 @@ def run_smoke_tests(base_url: str = DEFAULT_BASE_URL) -> bool:
     # -----------------------------------------------------------------------
     # Test 5: POST /v1/clarify with answer provided
     # -----------------------------------------------------------------------
-    time.sleep(3)
+    time.sleep(delay)
     resolved_payload = {
         "query": "phone is acting up and draining battery",
         "hypotheses": [
@@ -299,7 +304,7 @@ def run_smoke_tests(base_url: str = DEFAULT_BASE_URL) -> bool:
     # -----------------------------------------------------------------------
     # Test 6: POST /v1/troubleshoot-image with test image file
     # -----------------------------------------------------------------------
-    time.sleep(3)
+    time.sleep(delay)
     try:
         img_bytes = create_test_image_bytes()
         files = {"file": ("device_photo.jpg", img_bytes, "image/jpeg")}
@@ -364,6 +369,12 @@ def run_smoke_tests(base_url: str = DEFAULT_BASE_URL) -> bool:
 
 
 if __name__ == "__main__":
-    target_url = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_BASE_URL
-    success = run_smoke_tests(base_url=target_url)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Live end-to-end smoke tests against a running server")
+    parser.add_argument("base_url", nargs="?", default=DEFAULT_BASE_URL, help=f"Server URL (default: {DEFAULT_BASE_URL})")
+    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY_SECONDS,
+                        help=f"Seconds between live requests (default: {DEFAULT_DELAY_SECONDS}, for the 5/min free tier)")
+    args = parser.parse_args()
+    success = run_smoke_tests(base_url=args.base_url, delay=args.delay)
     sys.exit(0 if success else 1)

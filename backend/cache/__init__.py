@@ -10,12 +10,13 @@ Semantic cache for Diagnos AI (Person B).
 Every public function swallows its own errors: the cache must never break a request.
 """
 
+import hashlib
 import logging
 import os
 import re
 import threading
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
 import numpy as np
@@ -113,6 +114,7 @@ def _reset_stats() -> None:
         "stores": 0,
         "stores_skipped": 0,
         "evictions": 0,
+        "image_caption_hits": 0,
     })
 
 
@@ -140,6 +142,8 @@ def cache_clear() -> None:
         _reset_stats()
         _recent_lookups.clear()
         _recent_stores.clear()
+    with _caption_lock:
+        _captions.clear()
 
 
 def _norm_key(query: str) -> str:
@@ -509,6 +513,8 @@ def cache_stats() -> Dict[str, Any]:
             "stores": s["stores"],
             "stores_skipped": s["stores_skipped"],
             "evictions": s["evictions"],
+            "image_caption_hits": s["image_caption_hits"],
+            "image_captions": len(_captions),
             "threshold": _threshold(),
             "model_loaded": _model is not None,
         }
@@ -542,11 +548,61 @@ def cache_debug() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
+# ---------------------------------------------------------------------------
+# Image captions: an identical re-upload skips the Gemini vision call
+# ---------------------------------------------------------------------------
+
+_MAX_CAPTIONS = 500
+_caption_lock = threading.Lock()
+_captions: "OrderedDict[str, str]" = OrderedDict()  # sha256(mime + bytes) -> vision caption
+
+
+def _image_key(image_bytes: bytes, mime_type: str) -> str:
+    return hashlib.sha256(mime_type.encode() + b"\0" + image_bytes).hexdigest()
+
+
+def image_caption_lookup(image_bytes: bytes, mime_type: str = "") -> Optional[str]:
+    """
+    Caption previously produced for these exact image bytes, or None. Only identical bytes
+    match; the caption then goes through the normal semantic cache. Never raises.
+    """
+    try:
+        key = _image_key(image_bytes, mime_type)
+        with _caption_lock:
+            caption = _captions.get(key)
+            if caption is not None:
+                _captions.move_to_end(key)
+        if caption is not None:
+            with _store_lock:
+                _stats["image_caption_hits"] += 1
+        return caption
+    except Exception as e:
+        logger.warning("image_caption_lookup failed (treated as miss): %s", e)
+        return None
+
+
+def image_caption_store(image_bytes: bytes, caption: str, mime_type: str = "") -> None:
+    """Remembers a successful vision caption (bounded, oldest evicted). Only hashes are kept. Never raises."""
+    try:
+        if not caption or not caption.strip():
+            return
+        key = _image_key(image_bytes, mime_type)
+        with _caption_lock:
+            _captions[key] = caption.strip()
+            _captions.move_to_end(key)
+            while len(_captions) > _MAX_CAPTIONS:
+                _captions.popitem(last=False)
+    except Exception as e:
+        logger.warning("image_caption_store failed (ignored): %s", e)
+
+
 __all__ = [
     "cache_store",
     "cache_lookup",
     "cache_stats",
     "cache_debug",
+    "image_caption_lookup",
+    "image_caption_store",
     "is_cache_ready",
     "cache_clear",
     "extract_features",

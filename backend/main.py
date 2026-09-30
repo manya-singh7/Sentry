@@ -227,10 +227,15 @@ ENABLE_QUERY_VARIATIONS: bool = os.getenv("ENABLE_QUERY_VARIATIONS", "false").st
 ENABLE_SELF_CRITIQUE: bool = os.getenv("ENABLE_SELF_CRITIQUE", "false").strip().lower() in ("true", "1", "yes")
 
 try:
-    from cache import cache_debug, cache_lookup, cache_stats, cache_store, is_cache_ready
+    from cache import (
+        cache_debug, cache_lookup, cache_stats, cache_store, image_caption_lookup, image_caption_store, is_cache_ready,
+    )
 except ImportError:
     try:
-        from backend.cache import cache_debug, cache_lookup, cache_stats, cache_store, is_cache_ready
+        from backend.cache import (
+            cache_debug, cache_lookup, cache_stats, cache_store, image_caption_lookup, image_caption_store,
+            is_cache_ready,
+        )
     except ImportError:
         def cache_store(query: str, response: Any, variations: List[str]) -> None:
             """Pass-through stub for Person C cache store integration."""
@@ -247,6 +252,12 @@ except ImportError:
 
         def cache_debug() -> Dict[str, Any]:
             return {"enabled": False}
+
+        def image_caption_lookup(image_bytes: bytes, mime_type: str = "") -> Optional[str]:
+            return None
+
+        def image_caption_store(image_bytes: bytes, caption: str, mime_type: str = "") -> None:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -1932,36 +1943,42 @@ async def troubleshoot_image(
             meta=meta,
         )
 
-    if active_client is None:
-        return _vision_error_response("Gemini client is uninitialized")
+    # An identical re-upload reuses its caption (on-device, no vision call); the caption then goes
+    # through the semantic cache in troubleshoot() like any typed query.
+    detected_query = image_caption_lookup(image_bytes, content_type)
 
-    try:
-        image_part = types.Part.from_bytes(data=image_bytes, mime_type=content_type)
-        vision_prompt = (
-            "You are an expert TechCorp Nexa device technician. Analyze this device photo and describe "
-            "the visible hardware or display problem in one concise technical sentence (for example: "
-            "'Screen flickers with horizontal lines across display', 'Camera app crashed with black preview', "
-            "'Battery percentage stuck or device not charging', 'Touch screen unresponsive or shattered glass'). "
-            "Output ONLY the concise problem description without any URLs, greetings, or preamble."
-        )
-        caption_response = generate_content_with_failover(
-            client=active_client,
-            model=MODEL_NAME,
-            contents=[image_part, vision_prompt],
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                seed=42,
-                max_output_tokens=150,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            ),
-            call_name="troubleshoot_image_vision",
-        )
-        raw_caption = (caption_response.text or "").strip()
-        detected_query = scrub_urls(raw_caption).strip()
-        if not detected_query:
-            return _vision_error_response("Model produced empty image description")
-    except Exception as e:
-        return _vision_error_response(f"Vision API error: {e}")
+    if detected_query is None:
+        if active_client is None:
+            return _vision_error_response("Gemini client is uninitialized")
+
+        try:
+            image_part = types.Part.from_bytes(data=image_bytes, mime_type=content_type)
+            vision_prompt = (
+                "You are an expert TechCorp Nexa device technician. Analyze this device photo and describe "
+                "the visible hardware or display problem in one concise technical sentence (for example: "
+                "'Screen flickers with horizontal lines across display', 'Camera app crashed with black preview', "
+                "'Battery percentage stuck or device not charging', 'Touch screen unresponsive or shattered glass'). "
+                "Output ONLY the concise problem description without any URLs, greetings, or preamble."
+            )
+            caption_response = generate_content_with_failover(
+                client=active_client,
+                model=MODEL_NAME,
+                contents=[image_part, vision_prompt],
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    seed=42,
+                    max_output_tokens=150,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                ),
+                call_name="troubleshoot_image_vision",
+            )
+            raw_caption = (caption_response.text or "").strip()
+            detected_query = scrub_urls(raw_caption).strip()
+            if not detected_query:
+                return _vision_error_response("Model produced empty image description")
+        except Exception as e:
+            return _vision_error_response(f"Vision API error: {e}")
+        image_caption_store(image_bytes, detected_query, content_type)
 
     # Clean and sanitize optional typed complaint
     clean_typed_query = scrub_urls(query).strip() if query else ""

@@ -62,6 +62,9 @@ _DEEPLINK_STOPWORDS = {
 }
 
 
+from eval_datasets import find_queries_path, load_queries  # noqa: E402
+
+
 def rules_based_match_action(
     action_name: str,
     description: str = "",
@@ -142,43 +145,6 @@ def rules_based_match_action(
     return None
 
 
-def find_queries_path(explicit_path: str = "") -> Tuple[Path, bool]:
-    """Resolves queries.json or falls back to queries.sample.json with a warning."""
-    if explicit_path:
-        p = Path(explicit_path)
-        if p.exists():
-            return p, "sample" in p.name.lower()
-
-    root_dir = Path(__file__).resolve().parent.parent
-    real_path = root_dir / "queries.json"
-    if real_path.exists():
-        return real_path, False
-
-    sample_path = root_dir / "queries.sample.json"
-    if sample_path.exists():
-        return sample_path, True
-
-    cwd_real = Path.cwd() / "queries.json"
-    if cwd_real.exists():
-        return cwd_real, False
-
-    cwd_sample = Path.cwd() / "queries.sample.json"
-    if cwd_sample.exists():
-        return cwd_sample, True
-
-    raise FileNotFoundError("Could not find 'queries.json' or 'queries.sample.json'.")
-
-
-def load_queries(queries_path: Path) -> List[Dict[str, Any]]:
-    with open(queries_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if isinstance(data, list):
-        return data
-    elif isinstance(data, dict) and "queries" in data:
-        return data["queries"]
-    return []
-
-
 def run_ablation(
     queries_path_str: str = "",
     metrics_md_str: str = "metrics.md",
@@ -189,9 +155,8 @@ def run_ablation(
 
     if is_sample:
         warn_msg = (
-            "[WARNING] 'queries.json' not found in project root. "
-            "Falling back to 'queries.sample.json'. "
-            "Sample data is in use — results are not final numbers."
+            f"[WARNING] Using sample data ({queries_path.name}), not the official "
+            "dataset. Results are not final numbers."
         )
         logger.warning(warn_msg)
         print(warn_msg)
@@ -441,7 +406,8 @@ def run_ablation(
 
 def main():
     parser = argparse.ArgumentParser(description="Run architectural ablation analysis on Diagnos AI")
-    parser.add_argument("--queries", type=str, default="", help="Path to queries.json or queries.sample.json")
+    parser.add_argument("--queries", "--dataset", dest="queries", type=str, default="",
+                        help="Query file (.json or .txt, one query per line). Default: queries.json, else eval/official/input.txt, else queries.sample.json")
     parser.add_argument("--metrics-md", type=str, default="metrics.md", help="Path to metrics.md to update")
     parser.add_argument("--live", action="store_true", help="Execute live calls against Gemini API")
     parser.add_argument("--delay", type=float, default=15.0, help="Pacing delay in seconds between live queries")

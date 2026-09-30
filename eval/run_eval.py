@@ -42,41 +42,7 @@ logger = logging.getLogger("diagnos_ai.eval")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
-def find_queries_path(explicit_path: str = "") -> Tuple[Path, bool]:
-    """Resolves queries.json or falls back to queries.sample.json with a warning."""
-    if explicit_path:
-        p = Path(explicit_path)
-        if p.exists():
-            return p, "sample" in p.name.lower()
-
-    root_dir = Path(__file__).resolve().parent.parent
-    real_path = root_dir / "queries.json"
-    if real_path.exists():
-        return real_path, False
-
-    sample_path = root_dir / "queries.sample.json"
-    if sample_path.exists():
-        return sample_path, True
-
-    cwd_real = Path.cwd() / "queries.json"
-    if cwd_real.exists():
-        return cwd_real, False
-
-    cwd_sample = Path.cwd() / "queries.sample.json"
-    if cwd_sample.exists():
-        return cwd_sample, True
-
-    raise FileNotFoundError("Could not find 'queries.json' or 'queries.sample.json'.")
-
-
-def load_queries(queries_path: Path) -> List[Dict[str, Any]]:
-    with open(queries_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if isinstance(data, list):
-        return data
-    elif isinstance(data, dict) and "queries" in data:
-        return data["queries"]
-    return []
+from eval_datasets import find_queries_path, load_queries, write_results_meta  # noqa: E402
 
 
 def check_url_leaks_in_obj(obj: Any) -> List[str]:
@@ -205,9 +171,8 @@ def run_evaluation(
 
     if is_sample:
         warn_msg = (
-            "[WARNING] 'queries.json' not found in project root. "
-            "Falling back to 'queries.sample.json'. "
-            "Sample data is in use — results are not final numbers."
+            f"[WARNING] Using sample data ({queries_path.name}), not the official "
+            "dataset. Results are not final numbers."
         )
         logger.warning(warn_msg)
         print(warn_msg)
@@ -317,6 +282,9 @@ def run_evaluation(
         for r in results_records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
+    # Record which datasets produced these results, so generate_metrics.py can label them truthfully.
+    write_results_meta(output_path, queries_path, is_sample, total_queries, live)
+
     # Compute Summary Statistics
     latencies.sort()
     n = len(latencies)
@@ -357,7 +325,8 @@ def run_evaluation(
 
 def main():
     parser = argparse.ArgumentParser(description="Run evaluation on Diagnos AI troubleshooting pipeline")
-    parser.add_argument("--queries", type=str, default="", help="Path to queries.json (defaults to auto-detect)")
+    parser.add_argument("--queries", "--dataset", dest="queries", type=str, default="",
+                        help="Query file (.json or .txt, one query per line). Default: queries.json, else eval/official/input.txt, else queries.sample.json")
     parser.add_argument("--output", type=str, default="results.jsonl", help="Output results.jsonl file")
     parser.add_argument("--live", action="store_true", help="Execute live calls against Gemini API (max 6 calls)")
     parser.add_argument("--max-queries", type=int, default=6, help="Maximum number of queries to evaluate")

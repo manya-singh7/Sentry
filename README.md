@@ -108,6 +108,14 @@ Yes, and concretely, not just in principle. The path is short:
 
 ---
 
+---
+
 ## Built with
 
 FastAPI, Pydantic, Google Gemini, BM25 and dense retrieval, fastembed for on device caching, and a genuinely stubborn amount of live testing.
+
+---
+
+## Project Resources
+
+[Project Files & Documentation](https://drive.google.com/drive/folders/10wWDvrdxXd-FzyDGN1MgAOmW6UMZNecF?usp=share_link)
