@@ -19,7 +19,7 @@
                 "Optionally toggle on Gesture hint to display guidance lines at the bottom of the screen."
               ],
               "actionableDeeplink": {
-                "deeplink": "bixby://masked/act/setting/display/navigation_bar",
+                "deeplink": "voiceassist://masked/act/2f3dd95259",
                 "description": "Open navigation bar settings under Display",
                 "message": "choose navigation type in Display settings"
               },
@@ -39,7 +39,7 @@
                 "Tap Safe mode to reboot and test gesture behavior."
               ],
               "actionableDeeplink": {
-                "deeplink": "bixby://dummy_positive",
+                "deeplink": "voiceassist://dummy_positive",
                 "description": "Open general device settings placeholder",
                 "message": "navigate to unindexed settings screen"
               },
@@ -66,7 +66,7 @@
                 "Scroll down and toggle on Touch sensitivity."
               ],
               "actionableDeeplink": {
-                "deeplink": "bixby://dummy_positive",
+                "deeplink": "voiceassist://dummy_positive",
                 "description": "Open general device settings placeholder",
                 "message": "navigate to unindexed settings screen"
               },

@@ -38,6 +38,11 @@ from schema import (
     TroubleshootRequest,
     contains_url,
 )
+from main import _load_deeplink_catalog
+from schema import DUMMY_DEEPLINK_URI
+
+# DL-0169 in the official deeplinks.json: "Opens the navigation bar settings page"
+_NAV_BAR_URI = "voiceassist://masked/act/2f3dd95259"
 
 
 def run_pipeline_tests():
@@ -114,21 +119,24 @@ def run_pipeline_tests():
     # 4. Deeplink Rules: auto + strong match -> catalog, auto + Settings -> dummy_positive, manual -> None
     # -----------------------------------------------------------------------
     try:
-        nav_link = get_deeplinks("Configure Navigation Bar Settings", "navigation bar settings", category=ActionCategory.auto)
-        touch_link = get_deeplinks("Adjust Display Touch Sensitivity", "open touch sensitivity settings", category=ActionCategory.auto)
+        # Rules only; which catalog entry wins is measured by eval/official/eval_retrieval.py.
+        catalog_uris = {item["deeplink"] for item in _load_deeplink_catalog()}
+        power_link = get_deeplinks("Enable Power Saving Mode", "turn on battery power saving mode", category=ActionCategory.auto)
+        # Game Booster has no entry in the official catalog -> dummy_positive
+        dummy_link = get_deeplinks("Configure Game Booster", "open game booster settings", category=ActionCategory.auto)
         manual_link = get_deeplinks("Clean Charging Port", "clean lint with brush", category=ActionCategory.manual)
 
         passed_rules = (
-            nav_link is not None
-            and "navigation_bar" in nav_link.deeplink
-            and touch_link is not None
-            and touch_link.deeplink == "bixby://dummy_positive"
+            power_link is not None
+            and power_link.deeplink in catalog_uris
+            and dummy_link is not None
+            and dummy_link.deeplink == DUMMY_DEEPLINK_URI
             and manual_link is None
         )
         record_test(
             "Deeplink Rules: Catalog match, Settings dummy_positive fallback, Manual veto",
             passed_rules,
-            f"nav: '{getattr(nav_link, 'deeplink', None)}', touch: '{getattr(touch_link, 'deeplink', None)}', manual: {manual_link}",
+            f"power: '{getattr(power_link, 'deeplink', None)}', dummy: '{getattr(dummy_link, 'deeplink', None)}', manual: {manual_link}",
         )
     except Exception as e:
         record_test("Deeplink Rules: Catalog match, Settings dummy_positive fallback, Manual veto", False, str(e))
@@ -150,21 +158,21 @@ def run_pipeline_tests():
                         StepGroup(
                             steps=["Tap display"],
                             actionableDeeplink=Deeplink(
-                                deeplink="bixby://masked/act/setting/display/navigation_bar",
+                                deeplink=_NAV_BAR_URI,
                                 description="Legitimate catalog link",
                             ),
                         ),
                         StepGroup(
                             steps=["Tap dummy"],
                             actionableDeeplink=Deeplink(
-                                deeplink="bixby://dummy_positive",
+                                deeplink=DUMMY_DEEPLINK_URI,
                                 description="Legitimate dummy positive",
                             ),
                         ),
                         StepGroup(
                             steps=["Tap rogue"],
                             actionableDeeplink=Deeplink(
-                                deeplink="bixby://hallucinated/unauthorized/action",
+                                deeplink="voiceassist://hallucinated/unauthorized/action",
                                 description="Rogue uncatalogued link",
                             ),
                         ),
@@ -175,8 +183,8 @@ def run_pipeline_tests():
 
         validate_and_sanitize_deeplinks([test_goal])
         sgs = test_goal.actions[0].stepGroups
-        valid_kept = sgs[0].actionableDeeplink is not None and sgs[0].actionableDeeplink.deeplink == "bixby://masked/act/setting/display/navigation_bar"
-        dummy_kept = sgs[1].actionableDeeplink is not None and sgs[1].actionableDeeplink.deeplink == "bixby://dummy_positive"
+        valid_kept = sgs[0].actionableDeeplink is not None and sgs[0].actionableDeeplink.deeplink == _NAV_BAR_URI
+        dummy_kept = sgs[1].actionableDeeplink is not None and sgs[1].actionableDeeplink.deeplink == DUMMY_DEEPLINK_URI
         rogue_stripped = sgs[2].actionableDeeplink is None
 
         record_test(
