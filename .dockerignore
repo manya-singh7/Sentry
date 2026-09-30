@@ -1,0 +1,23 @@
+# Git and testing artifacts
+.git
+.pytest_cache/
+
+# Byte-compiled / optimized files
+__pycache__/
+*.pyc
+
+# Local secrets and environment files
+.env
+
+# Virtual environments
+venv/
+.venv/
+
+# Node modules
+node_modules/
+
+# OS metadata
+.DS_Store
+
+# Local embedding model cache
+.fastembed_cache/
