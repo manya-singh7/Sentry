@@ -33,6 +33,13 @@ _STEP_OBJECT = re.compile(
     re.IGNORECASE,
 )
 _STEP_TAIL = re.compile(r"\s+(?:to|then|for|in|under|from|so|if|until|seven)\s+.*$|[.,;:!?].*$", re.IGNORECASE)
+# "Drag the Media slider." lands on the Media setting, not on the screen of the previous step.
+_SLIDER_STEP = re.compile(r"^(?:drag|move|slide|adjust|set)\s+(?:the\s+)?(.+?)\s+slider\b", re.IGNORECASE)
+# Trailing words that name the page rather than the setting: "Fingerprint settings" -> "fingerprint".
+_TRAILING_GENERIC = re.compile(r"(?:\s+(?:settings?|options?|menu|page|preferences))+$")
+# Words too generic to identify a setting on their own (unique-prefix matching only).
+_GENERIC_PREFIXES = {"screen", "display", "device", "phone", "settings", "sound", "sounds", "app", "apps",
+                     "system", "show", "auto", "use", "set", "turn", "open"}
 
 _ON = re.compile(r"\b(?:enable|enables|turn on|switch on|activate|allow)\b", re.IGNORECASE)
 _OFF = re.compile(r"\b(?:disable|disables|turn off|switch off|deactivate|stop)\b", re.IGNORECASE)
@@ -75,19 +82,55 @@ def _destination_step(steps: List[str]) -> Optional[str]:
     are the path ("Tap Accessibility." on the way to Assistant menu) and must not match.
     """
     for step in reversed(steps):
-        m = _STEP_OBJECT.match(step.strip())
+        s = step.strip()
+        m = _SLIDER_STEP.match(s) or _STEP_OBJECT.match(s)
         if m:
             return _STEP_TAIL.sub("", m.group(1))
     return None
 
 
-def _candidate_phrases(action_name: str, steps: List[str]) -> List[str]:
-    """Screen names in priority order: the action name, then the destination step."""
-    phrases = [_norm(_LEADING_VERBS.sub("", action_name.strip(), count=1))]
+def _variants(phrase: str) -> List[str]:
+    """phrase, without trailing page words, and with a plural last word singularised."""
+    out = [phrase]
+    stripped = _TRAILING_GENERIC.sub("", phrase).strip()
+    for p in (stripped,):
+        if p and p not in out:
+            out.append(p)
+    for p in list(out):
+        words = p.split()
+        if words and len(words[-1]) > 3 and words[-1].endswith("s") and not words[-1].endswith("ss"):
+            singular = " ".join(words[:-1] + [words[-1][:-1]])
+            if singular not in out:
+                out.append(singular)
+    return out
+
+
+def _raw_phrases(action_name: str, steps: List[str]) -> List[str]:
+    raw = [_norm(_LEADING_VERBS.sub("", action_name.strip(), count=1))]
     destination = _destination_step(steps)
     if destination:
-        phrases.append(_norm(destination))
-    return [p for p in phrases if p]
+        raw.append(_norm(destination))
+    return [p for p in raw if p]
+
+
+def _candidate_phrases(action_name: str, steps: List[str]) -> List[str]:
+    """Screen names in priority order: the action name, then the destination step (with variants)."""
+    phrases: List[str] = []
+    for p in _raw_phrases(action_name, steps):
+        for v in _variants(p):
+            if v and v not in phrases:
+                phrases.append(v)
+    return phrases
+
+
+def _page_phrases(action_name: str, steps: List[str]) -> List[str]:
+    """
+    Names that explicitly refer to a settings page: "Fingerprint settings" -> "fingerprint",
+    "Fingerprints" -> "fingerprint". Only these may prefix-match a longer label; a bare word like
+    "Storage" must not become "Storage Share".
+    """
+    raw = _raw_phrases(action_name, steps)
+    return [v for p in raw for v in _variants(p) if v not in raw]
 
 
 class _LabelIndex:
@@ -135,28 +178,49 @@ def match_by_label(
             label, score = phrase, EXACT_SCORE
             break
 
-    # 2. Contained: the longest multi-word label that appears verbatim in the action name,
-    #    description or destination step (not in path steps, for the same reason as above).
+    # 2. Contained: the longest multi-word label that appears verbatim in the action name or
+    #    destination step. Not the description: it names what the action affects ("reduce
+    #    mobile data usage"), not the screen it opens.
     if label is None:
-        text = f" {_norm(' '.join([action_name, description, _destination_step(steps) or '']))} "
+        text = f" {_norm(' '.join([action_name, _destination_step(steps) or '']))} "
         contained = [lb for lb in idx.by_label if " " in lb and f" {lb} " in text]
         if contained:
             label, score = max(contained, key=len), CONTAINED_SCORE
+
+    # 3. Unique prefix: a settings-page name ("Fingerprint settings", "Fingerprints") is the start
+    #    of exactly one label ("fingerprint unlock"), and is not a generic word on its own.
+    if label is None:
+        for phrase in _page_phrases(action_name, steps):
+            if phrase in _GENERIC_PREFIXES:
+                continue
+            prefixed = [lb for lb in idx.by_label if lb.startswith(phrase + " ")]
+            if len(prefixed) == 1:
+                label, score = prefixed[0], CONTAINED_SCORE
+                break
 
     if label is None:
         return None
 
     entries = idx.by_label[label]
-    preference = _TYPE_PREFERENCE[_intent(action_name, steps, description)]
+    intent = _intent(action_name, steps, description)
+    preference = _TYPE_PREFERENCE[intent]
     candidates = [e for e in entries if e.get("originalType") in preference]
     if not candidates:
         return None  # e.g. only an "off" toggle exists for an "on" action: let BM25 decide
 
-    # Preferred type first; among equals, the entry sharing the most words with the action.
     action_words = set(_WORD.findall(" ".join([action_name, description] + steps).lower()))
 
-    def rank(e: Dict[str, Any]) -> Tuple[int, int]:
+    def overlap(e: Dict[str, Any]) -> int:
         entry_words = set(_WORD.findall(f"{e.get('description', '')} {e.get('qna_description', '')}".lower()))
-        return (preference.index(e["originalType"]), -len(action_words & entry_words))
+        return len(action_words & entry_words)
+
+    # On/off wording is decisive for toggles. "Change"/"check" barely separate a view page from
+    # an update control, so there the entry that shares more words with the action wins first.
+    if intent in ("on", "off"):
+        def rank(e: Dict[str, Any]) -> Tuple[int, int]:
+            return (preference.index(e["originalType"]), -overlap(e))
+    else:
+        def rank(e: Dict[str, Any]) -> Tuple[int, int]:
+            return (-overlap(e), preference.index(e["originalType"]))
 
     return min(candidates, key=rank), score

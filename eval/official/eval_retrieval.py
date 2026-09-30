@@ -23,6 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
+import main as pipeline  # noqa: E402
 from main import get_deeplinks  # noqa: E402
 from schema import DUMMY_DEEPLINK_URI, ActionCategory  # noqa: E402
 
@@ -150,7 +151,7 @@ def _sibling(a: dict, b: dict) -> bool:
     return bool(ka) and ka == kb and {a.get("originalType"), b.get("originalType")} == {"onURL", "offURL"}
 
 
-def evaluate(title: str, cases: list) -> None:
+def evaluate(title: str, cases: list, quiet: bool = False) -> dict:
     counts = {"correct": 0, "wrong": 0, "polarity": 0, "missed": 0, "dummy_ok": 0, "dummy_bad": 0}
     rows = []
     for name, desc, steps, expected in cases:
@@ -174,6 +175,8 @@ def evaluate(title: str, cases: list) -> None:
         want = "dummy" if expected == "dummy" else ", ".join(sorted(expected))
         rows.append((verdict, score, name, got_label, want))
 
+    if quiet:
+        return counts
     print(f"\n=== {title} ({len(cases)} cases) ===\n")
     print(f"{'verdict':17} {'score':>6}  {'action':36} {'served':44} expected")
     print("-" * 130)
@@ -189,11 +192,32 @@ def evaluate(title: str, cases: list) -> None:
     total_ok = counts["correct"] + counts["dummy_ok"]
     print(f"Overall: {total_ok}/{len(cases)} = {total_ok / len(cases):.0%} correct; "
           f"{counts['wrong'] + counts['dummy_bad']} cases would send the user to the wrong Settings screen")
+    return counts
+
+
+def sweep() -> None:
+    """Wrong-screen vs. lost-correct trade-off of the BM25 cutoff on the calibration set."""
+    original = pipeline.BM25_MIN_RELEVANCE
+    print(f"BM25 cutoff sweep on CALIBRATION ({len(CALIBRATION)} cases; current = {original})\n")
+    print(f"{'cutoff':>6}  {'correct':>7}  {'wrong screen':>12}  {'missed':>6}")
+    try:
+        for t in [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9]:
+            pipeline.BM25_MIN_RELEVANCE = t
+            c = evaluate("", CALIBRATION, quiet=True)
+            print(f"{t:6.2f}  {c['correct'] + c['dummy_ok']:>7}  {c['wrong'] + c['dummy_bad']:>12}  {c['missed']:>6}")
+    finally:
+        pipeline.BM25_MIN_RELEVANCE = original
 
 
 def main() -> None:
-    evaluate("Development set", CASES)
-    evaluate("Held-out set", HELDOUT)
+    if "--sweep" in sys.argv:
+        sweep()
+        return
+    sets = {"dev": ("Development set", CASES), "heldout": ("Held-out set", HELDOUT),
+            "calibration": ("Calibration set", CALIBRATION), "final": ("Final check", FINAL)}
+    chosen = [a for a in sys.argv[1:] if a in sets] or ["dev", "heldout", "calibration"]
+    for key in chosen:
+        evaluate(*sets[key])
 
 
 if __name__ == "__main__":

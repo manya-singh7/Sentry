@@ -1098,6 +1098,12 @@ def _dummy_deeplink_for(action_name: str, steps: Optional[List[str]]) -> Deeplin
     )
 
 MIN_RELEVANCE_THRESHOLD = 0.5
+# Cutoff for the BM25 fallback (used when an action names no catalog Settings label).
+# Chosen with `python eval/official/eval_retrieval.py --sweep`: across the eval sets every
+# correct BM25-only answer scored >= 0.825 and every wrong one <= 0.825 (one tie). 0.85 serves
+# no wrong screens at the cost of one correct link becoming the dummy; a wrong screen is the
+# worse failure. Small sample (23 BM25-decided cases): revisit with more labelled data.
+BM25_MIN_RELEVANCE = 0.85
 
 _CRITICAL_NON_SETTINGS_PATTERNS = [
     r"\brestarts?\b",
@@ -1245,8 +1251,10 @@ def get_deeplinks(
         else:
             best_item, match_score = None, 0.0
 
-    # Rule: auto + strong match -> catalog deeplink
-    if best_item and match_score >= MIN_RELEVANCE_THRESHOLD:
+    # Rule: auto + strong match -> catalog deeplink. BM25-only matches need a higher score:
+    # on the official catalog, unindexed screens otherwise pick up look-alike entries.
+    threshold = MIN_RELEVANCE_THRESHOLD if label_hit else BM25_MIN_RELEVANCE
+    if best_item and match_score >= threshold:
         dl = Deeplink(
             deeplink=best_item["deeplink"],
             description=best_item.get("description", action_name),
