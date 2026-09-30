@@ -51,7 +51,7 @@ def run_retrieval_tests():
         official_ok = (
             not retriever.is_sample
             and retriever.catalog_path.name == "deeplinks.json"
-            and len(retriever.indexed_docs) == 577  # 578 entries minus the dummy_positive placeholder
+            and len(retriever.indexed_docs) == 575  # 578 minus dummy_positive and malformed DL-0294/0295
         )
         record(
             "Catalog Detection: official deeplinks.json loaded; sample flagged when used",

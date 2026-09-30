@@ -53,7 +53,8 @@ def test_both_loaders_read_the_official_catalog():
     assert len(main._load_deeplink_catalog()) == 578
     retriever = get_retriever(force_reload=True)
     assert not retriever.is_sample
-    assert len(retriever.indexed_docs) == 577  # dummy_positive is never a retrieval candidate
+    # 578 minus dummy_positive and the two malformed DL-0294/0295 entries (label "onURL"/"offURL")
+    assert len(retriever.indexed_docs) == 575
     assert all(d["deeplink"] != DUMMY_DEEPLINK_URI for d in retriever.indexed_docs)
 
 
@@ -63,6 +64,35 @@ def test_every_catalog_entry_passes_our_deeplink_models():
                  originalType=e["originalType"])
         if e.get("validation"):
             ValidationDeepLink(**e["validation"])
+
+
+@pytest.mark.parametrize("action, steps, expected_id", [
+    # One label, three variants: the action's wording picks on / off / view.
+    ("Turn On Bluetooth", ["Open Settings.", "Tap Connections.", "Turn on Bluetooth."], "DL-0495"),
+    ("Disable Bluetooth", ["Open Settings.", "Tap Connections.", "Turn off Bluetooth."], "DL-0494"),
+    ("Open Bluetooth Settings", ["Open Settings.", "Tap Connections.", "Tap Bluetooth."], "DL-0044"),
+    # Exact label beats a longer lookalike ("Bluetooth scanning") and a misleading message.
+    ("Adjust Screen Timeout", ["Open Settings.", "Tap Display.", "Tap Screen timeout."], "DL-0220"),
+    # Parenthetical in the label is ignored: "Back up data (TechCorp Cloud)".
+    ("Back Up Phone Data", ["Open Settings.", "Tap on Accounts and backup.", "Select Back up data."], "DL-0542"),
+])
+def test_label_match_picks_the_named_setting(action, steps, expected_id):
+    from retrieval import match_by_label
+
+    entry, score = match_by_label(CATALOG, action, "", steps)
+    assert entry["id"] == expected_id
+    assert score == 1.0
+
+
+def test_label_match_ignores_path_steps_and_junk_entries():
+    from retrieval import get_retriever, match_by_label
+
+    # "Tap Accessibility." is the path to Assistant menu, not the destination.
+    assert match_by_label(CATALOG, "Disable Assistant Menu", "", [
+        "Open Settings.", "Tap Accessibility.", "Tap Interaction and dexterity.", "Turn off Assistant menu."]) is None
+    # DL-0294/0295 have "onURL"/"offURL" as their label: never matched, never indexed.
+    retriever = get_retriever(force_reload=True)
+    assert not {"DL-0294", "DL-0295"} & {d["id"] for d in retriever.indexed_docs}
 
 
 def test_sample_output_validates_against_official_schema():

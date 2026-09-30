@@ -1226,19 +1226,24 @@ def get_deeplinks(
     if is_critical and _is_critical_non_settings(combined_text):
         return (None, None) if return_score else None
 
-    # BM25 Retrieval via Person D's retrieval package
     try:
-        from retrieval import get_retriever
+        from retrieval import get_retriever, match_by_label
     except ImportError:
-        from backend.retrieval import get_retriever
+        from backend.retrieval import get_retriever, match_by_label
 
     retriever = get_retriever()
-    matches = retriever.retrieve(f"{action_name} {description}", top_k=1)
-    if matches:
-        best_item, best_score = matches[0]
-        match_score = float(best_score)
+    # Exact Settings-label match first (the catalog's validation keys); BM25 via Person D's
+    # retrieval package when the action names no catalog label.
+    label_hit = match_by_label(retriever.catalog, action_name, description, steps)
+    if label_hit:
+        best_item, match_score = label_hit
     else:
-        best_item, match_score = None, 0.0
+        matches = retriever.retrieve(f"{action_name} {description}", top_k=1)
+        if matches:
+            best_item, best_score = matches[0]
+            match_score = float(best_score)
+        else:
+            best_item, match_score = None, 0.0
 
     # Rule: auto + strong match -> catalog deeplink
     if best_item and match_score >= MIN_RELEVANCE_THRESHOLD:
