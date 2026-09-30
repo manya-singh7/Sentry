@@ -19,6 +19,10 @@ def run_failover_tests():
     print("RUNNING GEMINI DUAL-KEY FAILOVER TESTS")
     print("=" * 75)
 
+    orig_primary = bmain.gemini_client_primary
+    orig_backup = bmain.gemini_client_backup
+    orig_client = bmain.gemini_client
+
     # -------------------------------------------------------------------------
     # Test 1: Quota Detection Predicate (_is_quota_exhausted)
     # -------------------------------------------------------------------------
@@ -210,6 +214,7 @@ def run_failover_tests():
     elapsed_ms = (time.perf_counter() - start_t) * 1000
 
     assert goals == [], "Must return empty goals on dual exhaustion"
+    assert usage.get("service_busy") is True, "Must set service_busy on dual exhaustion"
     # Crucial assertion: exactly 1 call per client (2 calls total), NOT 6 calls across 3 retries!
     assert mock_primary.models.generate_content.call_count == 1, (
         f"Primary must be called exactly 1 time, got {mock_primary.models.generate_content.call_count}"
@@ -223,10 +228,100 @@ def run_failover_tests():
         f"(2 calls total, {elapsed_ms:.2f}ms latency, 0 schema retries consumed)"
     )
 
+    # -------------------------------------------------------------------------
+    # Test 8: Single-key 429 quota failure in extract_goals gets transient backoff
+    # (capped at 1 retry), then aborts with service_busy: True
+    # -------------------------------------------------------------------------
+    mock_primary.reset_mock()
+    bmain.gemini_client_backup = None
+    mock_primary.models.generate_content.side_effect = err_429
+
+    with patch("time.sleep") as mock_sleep:
+        goals, usage = bmain.extract_goals(
+            query="screen freezes constantly",
+            client=mock_primary,
+            max_retries=2,
+        )
+
+    assert goals == [], "Must return empty goals on single-key 429 quota failure"
+    assert usage.get("service_busy") is True, "Must set service_busy flag on quota failure"
+    # Capped at attempt 0 + 1 retry with backoff = 2 calls total (NOT 3 unbacked-off retries)
+    assert mock_primary.models.generate_content.call_count == 2, (
+        f"Expected exactly 2 attempts before aborting (1 retry), got {mock_primary.models.generate_content.call_count}"
+    )
+    assert mock_sleep.call_count == 1, "Expected exactly 1 backoff sleep before retry"
+    assert mock_sleep.call_args[0][0] == 1.5, "Expected 1.5s backoff duration"
+    print("[PASS] Test 8: Single-key 429 correctly treated as transient with 1.5s backoff, capped at 1 retry, returning service_busy: True")
+
+    # -------------------------------------------------------------------------
+    # Test 9: End-to-end troubleshoot() returns fallback: "service_busy" on quota error
+    # -------------------------------------------------------------------------
+    from schema import TroubleshootRequest
+    mock_primary.reset_mock()
+    bmain.gemini_client = mock_primary
+    bmain.gemini_client_primary = mock_primary
+    bmain.gemini_client_backup = None
+    mock_primary.models.generate_content.side_effect = err_429
+
+    with patch("time.sleep"):
+        resp = bmain.troubleshoot(
+            TroubleshootRequest(query="my screen won't turn on"),
+            skip_cache_lookup=True,
+        )
+
+    assert resp.contexts == [], "Contexts must be empty on service_busy"
+    assert resp.fallback == "service_busy", f"Expected fallback 'service_busy', got '{resp.fallback}'"
+    print("[PASS] Test 9: End-to-end troubleshoot() cleanly returns fallback 'service_busy' on mocked 429")
+
+    # -------------------------------------------------------------------------
+    # Test 10: DualKeyQuotaExhaustedError in troubleshoot() returns fallback: "service_busy"
+    # -------------------------------------------------------------------------
+    mock_primary.reset_mock()
+    mock_backup.reset_mock()
+    bmain.gemini_client = mock_primary
+    bmain.gemini_client_primary = mock_primary
+    bmain.gemini_client_backup = mock_backup
+    mock_primary.models.generate_content.side_effect = err_429
+    mock_backup.models.generate_content.side_effect = err_429
+
+    resp_dual = bmain.troubleshoot(
+        TroubleshootRequest(query="camera preview is black"),
+        skip_cache_lookup=True,
+    )
+    assert resp_dual.contexts == [], "Contexts must be empty on dual key exhaustion"
+    assert resp_dual.fallback == "service_busy", f"Expected fallback 'service_busy', got '{resp_dual.fallback}'"
+    print("[PASS] Test 10: Dual key exhaustion in troubleshoot() cleanly returns fallback 'service_busy'")
+
+    # -------------------------------------------------------------------------
+    # Test 11: Transient 503 in troubleshoot() returns fallback: "service_busy"
+    # -------------------------------------------------------------------------
+    mock_primary.reset_mock()
+    bmain.gemini_client = mock_primary
+    bmain.gemini_client_primary = mock_primary
+    bmain.gemini_client_backup = None
+    mock_primary.models.generate_content.side_effect = err_503
+
+    with patch("time.sleep"):
+        resp_503 = bmain.troubleshoot(
+            TroubleshootRequest(query="phone battery dies fast"),
+            skip_cache_lookup=True,
+        )
+    assert resp_503.contexts == [], "Contexts must be empty on 503 overload"
+    assert resp_503.fallback == "service_busy", f"Expected fallback 'service_busy', got '{resp_503.fallback}'"
+    print("[PASS] Test 11: Transient 503 in troubleshoot() cleanly returns fallback 'service_busy'")
+
     print("\n" + "=" * 75)
-    print("ALL DUAL-KEY FAILOVER TESTS PASSED SUCCESSFULLY!")
+    print("ALL DUAL-KEY FAILOVER & SERVICE_BUSY TESTS PASSED SUCCESSFULLY!")
     print("=" * 75)
+
+    bmain.gemini_client_primary = orig_primary
+    bmain.gemini_client_backup = orig_backup
+    bmain.gemini_client = orig_client
+
+
+test_key_failover = run_failover_tests
 
 
 if __name__ == "__main__":
     run_failover_tests()
+

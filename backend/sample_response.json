@@ -38,11 +38,7 @@
                 "Touch and hold the Power off icon.",
                 "Tap Safe mode to reboot and test gesture behavior."
               ],
-              "actionableDeeplink": {
-                "deeplink": "voiceassist://dummy_positive",
-                "description": "Open general device settings placeholder",
-                "message": "navigate to unindexed settings screen"
-              },
+              "actionableDeeplink": null,
               "validationDeeplink": null
             }
           ]

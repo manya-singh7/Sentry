@@ -324,7 +324,7 @@ class ResponseMeta(BaseModel):
 class ContextDeeplinkResponse(BaseModel):
     """RAG response containing a list of Goal objects, optional fallback, and operational metadata."""
     contexts: List[Goal] = Field(default_factory=list)
-    fallback: Optional[str] = Field(None, description="Fallback flag, e.g. 'no_match' or 'vision_unavailable'")
+    fallback: Optional[str] = Field(None, description="Fallback flag, e.g. 'no_match', 'service_busy', or 'vision_unavailable'")
     meta: Optional[ResponseMeta] = Field(None, description="Operational metadata")
     error: Optional[str] = Field(None, description="Error code if request or vision processing failed")
     message: Optional[str] = Field(None, description="Human-readable explanation or guidance")
@@ -332,7 +332,7 @@ class ContextDeeplinkResponse(BaseModel):
     @model_validator(mode="after")
     def validate_fallback_and_contexts(self) -> "ContextDeeplinkResponse":
         if (
-            self.fallback in ("no_match", "no_match_offdomain_heuristic", "vision_unavailable")
+            self.fallback in ("no_match", "no_match_offdomain_heuristic", "vision_unavailable", "service_busy")
             or (self.fallback and self.fallback.startswith("no_match"))
         ) and len(self.contexts) > 0:
             raise ValueError(f"When fallback is '{self.fallback}', contexts must be empty ([])")
@@ -387,14 +387,14 @@ class ClarifyResponse(ContextDeeplinkResponse):
 
 class AppendixBInnerResponse(BaseModel):
     contexts: List[Goal] = Field(default_factory=list)
-    fallback: Optional[str] = Field(None, description="Fallback flag, e.g. 'no_match' or 'vision_unavailable'")
+    fallback: Optional[str] = Field(None, description="Fallback flag, e.g. 'no_match', 'service_busy', or 'vision_unavailable'")
     error: Optional[str] = Field(None, description="Error code if request or vision processing failed")
     message: Optional[str] = Field(None, description="Human-readable explanation or guidance")
 
     @model_validator(mode="after")
     def validate_fallback_and_contexts(self) -> "AppendixBInnerResponse":
         if (
-            self.fallback in ("no_match", "no_match_offdomain_heuristic", "vision_unavailable")
+            self.fallback in ("no_match", "no_match_offdomain_heuristic", "vision_unavailable", "service_busy")
             or (self.fallback and self.fallback.startswith("no_match"))
         ) and len(self.contexts) > 0:
             raise ValueError(f"When fallback is '{self.fallback}', contexts must be empty ([])")

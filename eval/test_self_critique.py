@@ -10,6 +10,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from schema import Goal, Action, ActionCategory, StepGroup, TroubleshootRequest
 import backend.main as bmain
 
+_orig_extract_goals = bmain.extract_goals
+_orig_critique_goals_combined = bmain.critique_goals_combined
+_orig_gemini_client = bmain.gemini_client
+_orig_enable_self_critique = os.environ.get("ENABLE_SELF_CRITIQUE")
+
 goal1 = Goal(
     goal="Follow these steps to perform this Battery Troubleshooting",
     title="Battery optimization",
@@ -154,3 +159,12 @@ assert resp_rejected.meta.critique_rejections[0] == {
 print("[PASS] Rejection tracking: meta.critique_rejections populated correctly when goal is rejected")
 
 print("\nALL COMBINED CRITIQUE & SLA GUARD TESTS PASSED SUCCESSFULLY!")
+
+# Restore patched globals to prevent test state leakage
+bmain.extract_goals = _orig_extract_goals
+bmain.critique_goals_combined = _orig_critique_goals_combined
+bmain.gemini_client = _orig_gemini_client
+if _orig_enable_self_critique is not None:
+    os.environ["ENABLE_SELF_CRITIQUE"] = _orig_enable_self_critique
+elif "ENABLE_SELF_CRITIQUE" in os.environ:
+    del os.environ["ENABLE_SELF_CRITIQUE"]

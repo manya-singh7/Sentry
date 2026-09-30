@@ -90,11 +90,7 @@ Processes a customer complaint and optional customer-care reference text (`siis_
                 "Touch and hold the Power off icon.",
                 "Tap Safe mode to reboot and test gesture behavior."
               ],
-              "actionableDeeplink": {
-                "deeplink": "voiceassist://dummy_positive",
-                "description": "Open general device settings placeholder",
-                "message": "navigate to unindexed settings screen"
-              },
+              "actionableDeeplink": null,
               "validationDeeplink": null
             }
           ]
@@ -125,6 +121,10 @@ Processes a customer complaint and optional customer-care reference text (`siis_
   }
 }
 ```
+* **Fallback Statuses**:
+  - `fallback: "no_match"`: Valid on-domain or off-domain query for which no troubleshooting procedure exists.
+  - `fallback: "service_busy"`: The upstream LLM hit rate-limiting / quota exhaustion (HTTP 429) or transient backend overload (HTTP 503) and failed gracefully after backoff.
+  - `fallback: "vision_unavailable"`: Vision screenshot analysis failed on `/v1/troubleshoot-image`.
 
 ### Contract Constraints & Guarantees
 1. **Ranked Hypotheses**: `contexts` contains up to 2 `Goal` objects ordered by confidence `score` descending.

@@ -1010,29 +1010,35 @@ def extract_goals(
                 max_retries + 1,
                 e,
             )
+            token_usage["service_busy"] = True
             return [], token_usage
         except Exception as e:
             error_msg = str(e)
             err_lower = error_msg.lower()
-            is_transient = any(
+            is_quota = _is_quota_exhausted(e)
+            is_transient = is_quota or any(
                 err_pattern in err_lower
                 for err_pattern in ["503", "unavailable", "timeout", "timed out", "connection"]
             ) or isinstance(e, (ConnectionError, TimeoutError))
 
-            # Option C: Strict <= 8000ms SLA ceiling for transient network/API errors
+            # Option C: Strict <= 8000ms SLA ceiling for transient network/API and quota errors
             if is_transient:
-                if attempt == 0:
+                if attempt == 0 and max_retries > 0:
                     logger.warning(
-                        "Transient API error on attempt 1/2: %s | Backing off for 1.5s before single retry...",
+                        "Transient API or quota error on attempt 1/%d: %s | Backing off for 1.5s before single retry...",
+                        min(2, max_retries + 1),
                         error_msg,
                     )
                     time.sleep(1.5)
                     continue
                 else:
                     logger.warning(
-                        "Transient API error persisted on attempt 2/2: %s | Aborting to preserve <= 8000ms SLA, returning fallback.",
+                        "Transient API or quota error persisted on attempt %d/%d: %s | Aborting to preserve <= 8000ms SLA, returning fallback.",
+                        attempt + 1,
+                        max_retries + 1,
                         error_msg,
                     )
+                    token_usage["service_busy"] = True
                     return [], token_usage
 
             # Standard Pydantic schema validation error path (completely unchanged)
@@ -1640,6 +1646,9 @@ def troubleshoot(
         token_usage["prompt_tokens"] = ext_tokens.get("prompt_tokens", 0)
         token_usage["candidates_tokens"] = ext_tokens.get("candidates_tokens", 0)
 
+    if ext_tokens.get("service_busy"):
+        token_usage["service_busy"] = True
+
     # Deterministic off-domain backstop enforcement:
     # If the complaint lacks device keywords (e.g. flight booking, chit-chat)
     # and the model still returned goals, discard those goals and trigger
@@ -1736,7 +1745,12 @@ def troubleshoot(
 
     # Fallback if no valid goal could be constructed or if discarded by off-domain backstop
     if not goals:
-        fallback_val = "no_match_offdomain_heuristic" if off_domain_discarded else "no_match"
+        if token_usage.get("service_busy") or ext_tokens.get("service_busy"):
+            fallback_val = "service_busy"
+        elif off_domain_discarded:
+            fallback_val = "no_match_offdomain_heuristic"
+        else:
+            fallback_val = "no_match"
         response_obj = serialize_response(
             contexts=[],
             fallback=fallback_val,
