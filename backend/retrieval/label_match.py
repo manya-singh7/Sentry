@@ -63,7 +63,17 @@ def _norm(text: str) -> str:
 
 
 def _intent(action_name: str, steps: List[str], description: str) -> str:
-    """Action name first, then steps, then description: the most explicit wording wins."""
+    """
+    An on/off verb in the destination step decides ("Configure Battery Usage" whose last step
+    is "Enable Put unused apps to sleep." is an "on"); otherwise the action name, then the
+    steps, then the description: the most explicit wording wins.
+    """
+    last = _last_destination_step(steps)
+    if last:
+        if _OFF.match(last):
+            return "off"
+        if _ON.match(last):
+            return "on"
     for text in [action_name, " ".join(steps), description]:
         if _OFF.search(text):
             return "off"
@@ -76,17 +86,45 @@ def _intent(action_name: str, steps: List[str], description: str) -> str:
     return "view"
 
 
-def _destination_step(steps: List[str]) -> Optional[str]:
-    """
-    Object of the last navigation/toggle step: the screen the action ends on. Earlier steps
-    are the path ("Tap Accessibility." on the way to Assistant menu) and must not match.
-    """
+def _last_destination_step(steps: List[str]) -> Optional[str]:
+    """The last navigation/toggle/slider step, stripped."""
     for step in reversed(steps):
         s = step.strip()
-        m = _SLIDER_STEP.match(s) or _STEP_OBJECT.match(s)
-        if m:
-            return _STEP_TAIL.sub("", m.group(1))
+        if _SLIDER_STEP.match(s) or _STEP_OBJECT.match(s):
+            return s
     return None
+
+
+def _destination_candidates(steps: List[str]) -> List[str]:
+    """
+    Names of the screen the action ends on, in priority order. Only the last
+    navigation/toggle step counts: earlier steps are the path ("Tap Accessibility." on the way
+    to Assistant menu) and must not match.
+      - full object first ("Put unused apps to sleep"), then with trailing clauses trimmed
+        ("Touch sensitivity to turn it on" -> "Touch sensitivity"): labels can contain "to"
+      - when that step only picks a value ("Select Standard refresh rate."), the step before
+        it names the screen ("Tap Motion smoothness."), if it is a multi-word setting; a
+        one-word parent menu (Accessibility, Display) is still just the path
+    """
+    for i in range(len(steps) - 1, -1, -1):
+        s = steps[i].strip()
+        m = _SLIDER_STEP.match(s) or _STEP_OBJECT.match(s)
+        if not m:
+            continue
+        obj = m.group(1)
+        candidates = [re.sub(r"[.,;:!?]+$", "", obj).strip(), _STEP_TAIL.sub("", obj).strip()]
+        if s.split()[0].lower() in ("select", "choose") and i > 0:
+            prev = _STEP_OBJECT.match(steps[i - 1].strip())
+            if prev and steps[i - 1].strip().split()[0].lower() in ("tap", "open", "go", "navigate"):
+                prev_name = _STEP_TAIL.sub("", prev.group(1)).strip()
+                if len(_norm(prev_name).split()) >= 2:
+                    candidates.append(prev_name)
+        out: List[str] = []
+        for c in candidates:
+            if c and c not in out:
+                out.append(c)
+        return out
+    return []
 
 
 def _variants(phrase: str) -> List[str]:
@@ -107,10 +145,12 @@ def _variants(phrase: str) -> List[str]:
 
 def _raw_phrases(action_name: str, steps: List[str]) -> List[str]:
     raw = [_norm(_LEADING_VERBS.sub("", action_name.strip(), count=1))]
-    destination = _destination_step(steps)
-    if destination:
-        raw.append(_norm(destination))
-    return [p for p in raw if p]
+    raw += [_norm(c) for c in _destination_candidates(steps)]
+    out: List[str] = []
+    for p in raw:
+        if p and p not in out:
+            out.append(p)
+    return out
 
 
 def _candidate_phrases(action_name: str, steps: List[str]) -> List[str]:
@@ -182,7 +222,7 @@ def match_by_label(
     #    destination step. Not the description: it names what the action affects ("reduce
     #    mobile data usage"), not the screen it opens.
     if label is None:
-        text = f" {_norm(' '.join([action_name, _destination_step(steps) or '']))} "
+        text = f" {_norm(' '.join([action_name] + _destination_candidates(steps)))} "
         contained = [lb for lb in idx.by_label if " " in lb and f" {lb} " in text]
         if contained:
             label, score = max(contained, key=len), CONTAINED_SCORE

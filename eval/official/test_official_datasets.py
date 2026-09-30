@@ -75,6 +75,13 @@ def test_every_catalog_entry_passes_our_deeplink_models():
     ("Adjust Screen Timeout", ["Open Settings.", "Tap Display.", "Tap Screen timeout."], "DL-0220"),
     # Parenthetical in the label is ignored: "Back up data (TechCorp Cloud)".
     ("Back Up Phone Data", ["Open Settings.", "Tap on Accounts and backup.", "Select Back up data."], "DL-0542"),
+    # From the live run on 30 Sep, exactly as Gemini wrote them:
+    # "Select ..." picks a value, so the screen is the step before it.
+    ("Adjust Display Refresh Rate", ["Open Settings.", "Tap Display.", "Tap Motion smoothness.",
+                                     "Select Standard refresh rate."], "DL-0228"),
+    # Labels can contain "to"; the destination step's "Enable" picks the on variant.
+    ("Configure Battery Usage Settings", ["Open Settings.", "Tap Battery.", "Tap Background usage limits.",
+                                          "Enable Put unused apps to sleep."], "DL-0417"),
 ])
 def test_label_match_picks_the_named_setting(action, steps, expected_id):
     from retrieval import match_by_label
@@ -90,6 +97,9 @@ def test_label_match_ignores_path_steps_and_junk_entries():
     # "Tap Accessibility." is the path to Assistant menu, not the destination.
     assert match_by_label(CATALOG, "Disable Assistant Menu", "", [
         "Open Settings.", "Tap Accessibility.", "Tap Interaction and dexterity.", "Turn off Assistant menu."]) is None
+    # A "Select ..." step only falls back to a multi-word screen, never a one-word parent menu.
+    assert match_by_label(CATALOG, "Pick Assistant Option", "", [
+        "Open Settings.", "Tap Accessibility.", "Select Assistant menu."]) is None
     # DL-0294/0295 have "onURL"/"offURL" as their label: never matched, never indexed.
     retriever = get_retriever(force_reload=True)
     assert not {"DL-0294", "DL-0295"} & {d["id"] for d in retriever.indexed_docs}
