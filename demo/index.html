@@ -315,12 +315,14 @@ function extract(d){
   return {contexts:Array.isArray(d.contexts)?d.contexts:[],fallback:d.fallback,message:d.message,meta:d.meta||{}};
 }
 function clarifyBadge(state,gap){
-  const t={na:"Single clear cause",ok:`Clarify check passed${gap?` (gap ${gap}%)`:""}`,asked:"Needs one more detail",error:"Clarify check unavailable"}[state];
+  const t={na:"Single clear cause",nomatch:"No plan to clarify",ok:`Top match led by ${gap}%, no follow-up needed`,asked:"Needs one more detail",error:"Clarify check unavailable"}[state];
   clarifyBadgeWrap.innerHTML=`<span class="tag ${state==="asked"?"on":""}">${t}</span>`;
 }
 async function maybeClarify(data){
   const {contexts,fallback}=extract(data);
-  if(fallback||contexts.length<2){ clarifyBadge("na"); return; }
+  // No real matched result: show no clarify badge at all.
+  if(fallback||contexts.length===0){ clarifyBadgeWrap.innerHTML=""; return; }
+  if(contexts.length<2){ clarifyBadge("na"); return; }
   const hyps=contexts.slice(0,2).map(c=>({title:c.title,score:c.score}));
   const gap=Math.round(Math.abs((hyps[0].score||0)-(hyps[1].score||0))*100);
   try{
@@ -404,7 +406,9 @@ function renderResponse(data,cd=null){
   $("metaCost").textContent=`$${(meta.cost_usd||0).toFixed(6)}`;
   const hit=!!meta.cache_hit; $("metaCache").textContent=hit?"Hit":"Miss";
   $("metaCacheNote").textContent=describeCache(cd)||"";
-  renderSource(meta,cd); renderFraming(lastRawText);
+  // Reset source badge; it is only drawn once we know there is a real matched result.
+  sourceBadgeWrap.innerHTML=""; $("badgeCaption").style.display="none";
+  renderFraming(lastRawText);
   telemetryBar.style.display="flex";
 
   if(fallback==="vision_unavailable"){
@@ -413,14 +417,19 @@ function renderResponse(data,cd=null){
   if(fallback==="no_match"||fallback==="no_siis_context"||contexts.length===0){
     resultsContainer.innerHTML=`<div class="panel empty"><h3>No confident match in the catalog</h3><p>Try naming the symptom or setting, such as "swipe navigation", "battery drain", or "camera reset".</p></div>`; return;
   }
+  renderSource(meta,cd);   // only reached when there is an actual matched result
   let html="";
   contexts.forEach((goal,gi)=>{
     const pct=Math.round((goal.score||0)*100);
     const tr=trace(goal,gi,contexts,meta,cd).map(x=>`<li>${esc(x)}</li>`).join("");
+    // Only claim self-critique happened if the response actually carries self_critique data.
+    const verifiedText=goal.self_critique
+      ? "Verified via catalog retrieval, self-critique, and link validation, not a raw model guess."
+      : "Matched against the troubleshooting catalog.";
     html+=`<article class="goal"><div class="goal-head">${gauge(pct)}<div>
       <div class="area">Hypothesis ${gi+1} of ${contexts.length}: ${esc(area(goal))}</div>
       <div class="goal-title">${esc(goal.title)}</div><div class="goal-text">${esc(goal.goal)}</div></div></div>
-      <div class="verified">Verified via catalog retrieval, self-critique, and link validation, not a raw model guess.</div>
+      <div class="verified">${esc(verifiedText)}</div>
       <details class="trace"><summary>Why this diagnosis?</summary><ul>${tr}</ul></details><div class="actions">`;
     (goal.actions||[]).forEach(act=>{
       const cat=(act.category||"manual").toLowerCase();
@@ -434,7 +443,7 @@ function renderResponse(data,cd=null){
   });
   resultsContainer.innerHTML=html;
 }
-resultsContainer.addEventListener("click",e=>{ const b=e.target.closest(".deeplink"); if(b) showToast(`Demo only. On a Galaxy this opens: ${b.dataset.uri}`); });
+resultsContainer.addEventListener("click",e=>{ const b=e.target.closest(".deeplink"); if(b) showToast(`Demo only. On a supported device this opens: ${b.dataset.uri}`); });
 </script>
 </body>
 </html>
