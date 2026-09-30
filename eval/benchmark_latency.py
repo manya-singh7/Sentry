@@ -11,7 +11,7 @@ from google.genai import types
 
 client = genai.Client()
 
-prompt = """You are an expert Samsung Galaxy device troubleshooting AI.
+prompt = """You are an expert TechCorp Nexa device troubleshooting AI.
 Output a JSON Goal object adhering to:
 - goal: "Follow these steps to perform this Swipe Navigation Troubleshooting"
 - title: "Swipe navigation settings"

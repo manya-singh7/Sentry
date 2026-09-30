@@ -181,9 +181,9 @@ class Action(BaseModel):
         if not v.startswith("It will"):
             raise ValueError(f"description must start with 'It will', got: '{v}'")
         words = v.split()
-        if not (5 <= len(words) <= 7):
+        if not (5 <= len(words) <= 15):
             raise ValueError(
-                f"description must be exactly 5 to 7 words (counting 'It will'), got {len(words)}: '{v}'"
+                f"description must be between 5 and 15 words (counting 'It will'), got {len(words)}: '{v}'"
             )
         return v
 

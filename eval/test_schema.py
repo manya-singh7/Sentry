@@ -106,19 +106,19 @@ def run_tests():
         record_test("Invalid: fallback 'no_match' with non-empty contexts", True, f"Correctly caught: {e.errors()[0]['msg']}")
 
     # -----------------------------------------------------------------------
-    # 4. Description Validation: Must start with "It will", 5-7 words
+    # 4. Description Validation: Must start with "It will", 5-15 words
     # -----------------------------------------------------------------------
-    # (a) Does not start with "It will"
+    # (a) Does not start with "It will" / 1 word
     try:
         Action(
             actionName="Battery Saver",
-            description="This will extend device battery life",
+            description="Invalid",  # 1 word, does not start with 'It will'
             category=ActionCategory.auto,
             stepGroups=[StepGroup(steps=["Turn on battery saver"])]
         )
-        record_test("Invalid: Description without 'It will'", False, "Should have failed")
+        record_test("Invalid: Description without 'It will' (1 word)", False, "Should have failed")
     except ValidationError as e:
-        record_test("Invalid: Description without 'It will'", True, f"Correctly caught: {e.errors()[0]['msg']}")
+        record_test("Invalid: Description without 'It will' (1 word)", True, f"Correctly caught: {e.errors()[0]['msg']}")
 
     # (b) Too short (< 5 words)
     try:
@@ -132,17 +132,35 @@ def run_tests():
     except ValidationError as e:
         record_test("Invalid: Description too short (4 words)", True, f"Correctly caught: {e.errors()[0]['msg']}")
 
-    # (c) Too long (> 7 words)
+    # (c) Valid generous range (9 and 12 words from official sample_output.json)
+    try:
+        Action(
+            actionName="Backup Data",
+            description="It will facilitate secure data transfer between your devices",  # 9 words
+            category=ActionCategory.auto,
+            stepGroups=[StepGroup(steps=["Open Settings."])]
+        )
+        Action(
+            actionName="Locate Service",
+            description="It will help you locate the nearest TechCorp service center and schedule",  # 12 words
+            category=ActionCategory.manual,
+            stepGroups=[StepGroup(steps=["Open Support."])]
+        )
+        record_test("Valid: Descriptions with 9 and 12 words accepted", True, "Successfully parsed 9 and 12 word descriptions")
+    except ValidationError as e:
+        record_test("Valid: Descriptions with 9 and 12 words accepted", False, str(e))
+
+    # (d) Too long (> 15 words / 30 words)
     try:
         Action(
             actionName="Battery Saver",
-            description="It will greatly extend the overall battery life of device",  # 10 words
+            description="It will greatly extend the overall battery life of your device by disabling all background activities and turning off high refresh rate display features completely when the screen is locked",  # 27 words
             category=ActionCategory.auto,
             stepGroups=[StepGroup(steps=["Turn on battery saver"])]
         )
-        record_test("Invalid: Description too long (10 words)", False, "Should have failed")
+        record_test("Invalid: Description too long (> 15 words)", False, "Should have failed")
     except ValidationError as e:
-        record_test("Invalid: Description too long (10 words)", True, f"Correctly caught: {e.errors()[0]['msg']}")
+        record_test("Invalid: Description too long (> 15 words)", True, f"Correctly caught: {e.errors()[0]['msg']}")
 
     # -----------------------------------------------------------------------
     # 5. Title Validation: 2-3 words, Sentence case

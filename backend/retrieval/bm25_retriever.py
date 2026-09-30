@@ -17,7 +17,8 @@ _DEEPLINK_STOPWORDS = {
 }
 
 _GENERIC_MATCH_WORDS = {
-    "device", "phone", "mobile", "samsung", "galaxy", "settings", "setting",
+    "device", "phone", "mobile", "samsung", "galaxy", "techcorp", "nexa", "voiceassist",
+    "settings", "setting",
     "options", "option", "feature", "screen", "component", "item", "hardware",
     "action", "troubleshooting", "configuration", "issue", "problem",
 }

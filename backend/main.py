@@ -426,7 +426,8 @@ _REAL_SETTINGS_SCREEN_PATTERNS = [
 ]
 
 _GENERIC_MATCH_WORDS = {
-    "device", "devices", "phone", "phones", "mobile", "samsung", "galaxy", "settings", "setting",
+    "device", "devices", "phone", "phones", "mobile", "samsung", "galaxy", "techcorp", "nexa", "voiceassist",
+    "settings", "setting",
     "options", "option", "feature", "features", "screen", "screens", "component", "components",
     "item", "items", "hardware", "action", "actions", "troubleshooting", "configuration",
     "issue", "issues", "problem", "problems", "glitch", "glitches", "bug", "bugs", "handset",
@@ -513,7 +514,7 @@ HARD CONSTRAINTS (Schema Rules for each Goal):
      2. System optimizations second (e.g. cleaning memory, optimizing battery, clearing cache)
      3. Reboots or device resets (device reboot, safe mode, factory reset) MUST always be placed last.
    - actionName: Title Case (e.g. "Configure Navigation Bar Settings"). One action per screen: represents exactly one physical screen or feature. Do not bundle multiple screens into one action or split a single screen into multiple actions.
-   - description: Exactly 5 to 7 words total, starting with the literal words "It will" (counting "It will" as the first two words). Example: "It will let you choose navigation type".
+   - description: Between 5 and 15 words total, starting with the literal words "It will" (counting "It will" as the first two words). Example: "It will let you choose navigation type".
    - category: One of:
      - "auto": Standard settings screen reachable via in-app deeplink.
      - "manual": Physical intervention (cleaning ports, replacing hardware, visiting service center).
@@ -776,8 +777,8 @@ def _normalize_and_validate_goal(data: Dict[str, Any]) -> Goal:
                     words = desc.split()
                     if len(words) < 5:
                         desc = f"{desc} to fix device"
-                    elif len(words) > 7:
-                        desc = _shorten_description(desc)
+                    elif len(words) > 15:
+                        desc = _shorten_description(desc, max_words=15)
                     act["description"] = desc
 
                 if "stepGroups" in act and isinstance(act["stepGroups"], list):
@@ -1439,12 +1440,12 @@ def validate_query_variations(raw_variations: List[str], base_query: str = "") -
         base_clean = scrub_urls(base_query).strip()
         defaults = [
             f"how to fix {base_clean}",
-            f"{base_clean} samsung galaxy issue",
+            f"{base_clean} techcorp nexa issue",
             f"my phone {base_clean}",
             f"{base_clean} troubleshooting steps",
             f"why does {base_clean}",
             f"{base_clean} help needed",
-            f"samsung {base_clean} not working",
+            f"techcorp {base_clean} not working",
             f"guide to resolve {base_clean}",
             f"phone problem {base_clean}",
             f"{base_clean} error fix",

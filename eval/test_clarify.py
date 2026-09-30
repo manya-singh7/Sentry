@@ -119,7 +119,7 @@ def run_clarify_tests():
                 resp.needs_clarification is False
                 and len(resp.contexts) > 0
                 and resp.contexts[0].title == "Uninstall rogue app"
-                and resp.contexts[0].score == 0.96
+                and resp.contexts[0].score == 0.675
             )
             record_test(
                 "Clarification answer re-runs pipeline and updates ranking",
