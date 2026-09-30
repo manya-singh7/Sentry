@@ -19,6 +19,7 @@ backend_dir = Path(__file__).resolve().parent.parent / "backend"
 sys.path.insert(0, str(backend_dir))
 
 from retrieval.bm25_retriever import get_retriever
+from eval_datasets import find_queries_path, load_queries, read_results_meta  # noqa: E402  (eval/ is on sys.path when run as a script)
 from schema import (
     ActionCategory,
     AppendixBResponse,
@@ -237,23 +238,18 @@ def compute_domain_breakdown(
     Battery, Display, Camera, and Performance.
     Returns structured stats dictionary and formatted markdown table.
     """
-    root_dir = Path(__file__).resolve().parent.parent
     if queries_path is None or not queries_path.exists():
-        queries_path = root_dir / "queries.json"
-        if not queries_path.exists():
-            queries_path = root_dir / "queries.sample.json"
+        queries_path, _ = find_queries_path()
 
     query_to_domain: Dict[str, str] = {}
     if queries_path and queries_path.exists():
         try:
-            with open(queries_path, "r", encoding="utf-8") as f:
-                q_data = json.load(f)
-                items = q_data if isinstance(q_data, list) else q_data.get("queries", [])
-                for item in items:
-                    q_text = item.get("query", "").strip().lower()
-                    dom = item.get("domain", "")
-                    if q_text and dom:
-                        query_to_domain[q_text] = dom
+            # .json or .txt; plain-text queries carry no domain, so those fall back to keywords below
+            for item in load_queries(queries_path):
+                q_text = item.get("query", "").strip().lower()
+                dom = item.get("domain", "")
+                if q_text and dom:
+                    query_to_domain[q_text] = dom
         except Exception as e:
             logger.warning("Could not load queries for domain mapping: %s", e)
 
@@ -387,8 +383,8 @@ def generate_metrics_markdown(
     if metrics["is_sample_data"]:
         sample_notice = (
             "> [!WARNING]\n"
-            "> **SAMPLE DATA WARNING**: Evaluated using sample datasets (`queries.sample.json`, `deeplinks.sample.json`).\n"
-            "> These metrics reflect evaluation benchmarks on sample data and must not be mistaken for final numbers.\n\n"
+            f"> **SAMPLE DATA WARNING**: Evaluated on {metrics['dataset_desc']}.\n"
+            "> These metrics are not final numbers: re-run `eval/run_eval.py` on the official dataset.\n\n"
         )
 
     sec5_table = get_section_5_content(output_md_path)
@@ -401,7 +397,7 @@ def generate_metrics_markdown(
 {sample_notice}---
 
 ## 1. Schema & Rule Compliance
-Evaluated on sample datasets and held-out validation scenarios.
+Evaluated on {metrics['dataset_desc']}.
 
 | Metric | Target | Measured Value |
 | :--- | :--- | :--- |
@@ -452,7 +448,7 @@ Evaluated against reference ground truth scenarios across Battery, Display, Came
 ## 6. Known Edge Cases & System Limitations
 * **Multi-intent complaints**: Vague complaints spanning multiple hardware components trigger `/v1/clarify` for targeted single-turn disambiguation.
 * **Unindexed Settings screens**: Valid Android/One UI screens missing in catalog cleanly route to `voiceassist://dummy_positive` rather than hallucinating arbitrary URIs.
-* **Sample dataset**: Initial numbers are collected over `queries.sample.json` and `deeplinks.sample.json`. Production benchmark will re-populate upon receipt of the official PRISM enterprise dataset.
+* **Dataset**: {metrics['dataset_desc']}.
 """
 
     with open(output_md_path, "w", encoding="utf-8") as f:
@@ -461,6 +457,29 @@ Evaluated against reference ground truth scenarios across Battery, Display, Came
     print(f"[SUCCESS] Auto-filled metrics report with Sections 1-5 and Domain Breakdown: {output_md_path.resolve()}")
     if metrics["is_sample_data"]:
         print("[WARNING] Sample data was in use — results are clearly marked as sample data.")
+
+
+def apply_dataset_label(metrics: Dict[str, Any], results_path: Path) -> Optional[Path]:
+    """
+    Sets metrics["is_sample_data"] / metrics["dataset_desc"] from the results.meta.json that
+    run_eval.py writes next to results.jsonl, and returns the queries file it used. Without that
+    sidecar the provenance is unknown, so the results are flagged rather than assumed official.
+    """
+    meta = read_results_meta(results_path)
+    root_dir = Path(__file__).resolve().parent.parent
+    if not meta:
+        metrics["is_sample_data"] = True
+        metrics["dataset_desc"] = (
+            "an unrecorded dataset (no results.meta.json: re-run eval/run_eval.py to record which "
+            "queries and catalog were used)"
+        )
+        return None
+    metrics["is_sample_data"] = bool(meta.get("queries_are_sample") or meta.get("catalog_is_sample"))
+    metrics["dataset_desc"] = (
+        f"{meta.get('n_queries')} queries from `{meta.get('queries_file')}` against the "
+        f"`{meta.get('catalog_file')}` catalog ({'live Gemini' if meta.get('live') else 'offline, Gemini mocked'})"
+    )
+    return root_dir / meta["queries_file"] if meta.get("queries_file") else None
 
 
 def main():
@@ -473,7 +492,9 @@ def main():
         sys.exit(1)
 
     metrics = compute_metrics(results_path)
-    domain_stats, domain_table_md = compute_domain_breakdown(results_path)
+    queries_path = apply_dataset_label(metrics, results_path)
+    print(f"Dataset: {metrics['dataset_desc']}")
+    domain_stats, domain_table_md = compute_domain_breakdown(results_path, queries_path)
 
     print("\n" + "=" * 75)
     print("DOMAIN PERFORMANCE BREAKDOWN")
