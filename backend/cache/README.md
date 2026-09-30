@@ -12,6 +12,7 @@ Embeddings come from `all-MiniLM-L6-v2` via fastembed (ONNX, no torch). Storage 
    - **Polarity**, on three axes: power (on/off, enable/disable, connect/disconnect), level (high/low, brighter/dimmer, louder/quieter), speed (fast/slow). A negation (`not`, `won't`, `can't`, `stop`, …) within the 3 words before a cue flips it. The veto fires if both sides have a sign on the same axis and the signs differ.
    - **Entity**: bluetooth, wifi, mobile data, hotspot, nfc, location, brightness, dark mode, refresh rate, screen timeout, AOD, battery saver, charging, camera, flash, storage, memory, apps, notifications, volume. The veto fires if the two sets differ. `apps` is ignored when a more specific entity is present.
    - **Domain** (battery / display / camera / performance): the veto fires only if both sides have domains and they don't overlap.
+   - **Device** (tablet / foldable / phone / TV): the first device each query names. The veto fires only if both name one and they differ, so a tablet complaint is never answered with a cached phone answer. In the official `input.txt`, "My Nexa Fold X1 screen went completely black…" and "My tablet screen stays completely blank…" score exactly 0.750 and are separated only by this rule.
 
 The veto is strict on purpose. A false veto costs one Gemini call. A false hit shows the user the wrong fix.
 
@@ -21,16 +22,16 @@ Responses with `fallback: "no_match"` or empty `contexts` are never stored, so a
 
 MiniLM scores real paraphrases lower than you'd expect. "screen too dim" vs "display is too dark" is only 0.62. Opposite meanings can score very high: "enable dark mode" vs "disable dark mode" is 0.94. A threshold on its own can't separate these. The veto makes a low threshold safe.
 
-From `python eval/semantic_cache/tune_cache.py` (50 labelled pairs in `eval/semantic_cache/cache_pairs.json`: 22 should hit, 28 should not):
+From `python eval/semantic_cache/tune_cache.py` (53 labelled pairs in `eval/semantic_cache/cache_pairs.json`: 23 should hit, 30 should not):
 
 | threshold | accuracy | paraphrases served | wrong serves | blocked only by veto |
 |---|---|---|---|---|
-| **0.75** | **80.0%** | 12/22 | **0** | 15 |
-| 0.80 | 72.0% | 8/22 | 0 | 13 |
-| 0.85 | 66.0% | 5/22 | 0 | 11 |
-| 0.90 | 60.0% | 2/22 | 0 | 7 |
+| **0.75** | **81.1%** | 13/23 | **0** | 17 |
+| 0.80 | 71.7% | 8/23 | 0 | 14 |
+| 0.85 | 66.0% | 5/23 | 0 | 11 |
+| 0.90 | 60.4% | 2/23 | 0 | 7 |
 
-0.75 serves the most correct paraphrases with zero wrong serves. At that threshold, 15 pairs that should not hit clear the similarity bar and are stopped only by the veto.
+0.75 serves the most correct paraphrases with zero wrong serves. At that threshold, 17 pairs that should not hit clear the similarity bar and are stopped only by the veto.
 
 ## Live demo
 

@@ -1,0 +1,224 @@
+"""
+Deeplink retrieval accuracy on the official deeplinks.json (offline, no Gemini).
+
+Each case is an action the pipeline would plausibly produce for the input.txt complaints,
+labelled with the catalog entries that are correct for it (or "dummy" when the catalog has no
+entry for that screen). Labels are hand-picked from the catalog descriptions; review and extend
+them as needed.
+
+Runs the real main.get_deeplinks() and reports, per case and overall:
+  correct       served link is one of the labelled entries
+  wrong         a catalog link was served, but not a labelled one (the user gets the wrong screen)
+    polarity    ...and it is the on/off sibling of the labelled entry (e.g. Disable instead of Enable)
+  missed        a labelled catalog entry exists, but the dummy / no link was served
+  dummy ok/bad  for screens with no catalog entry: dummy or no link served, or a wrong catalog link served
+
+Usage: python eval/official/eval_retrieval.py
+"""
+
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "backend"))
+
+import main as pipeline  # noqa: E402
+from main import get_deeplinks  # noqa: E402
+from schema import DUMMY_DEEPLINK_URI, ActionCategory  # noqa: E402
+
+CATALOG = json.loads((ROOT / "deeplinks.json").read_text())["deeplinks"]
+BY_ID = {e["id"]: e for e in CATALOG}
+BY_URI = {e["deeplink"]: e for e in CATALOG}
+
+S = ["Open Settings."]
+# (action name, description, steps, labelled catalog IDs or "dummy")
+CASES = [
+    ("Adjust Screen Brightness", "It will change display brightness level", S + ["Tap Display.", "Drag the Brightness slider."], {"DL-0232", "DL-0496"}),
+    ("Disable Adaptive Brightness", "It will stop automatic brightness changes", S + ["Tap Display.", "Turn off Adaptive brightness."], {"DL-0020"}),
+    ("Enable Adaptive Brightness", "It will adjust brightness to surrounding light", S + ["Tap Display.", "Turn on Adaptive brightness."], {"DL-0021"}),
+    ("Adjust Screen Timeout", "It will keep the screen on longer", S + ["Tap Display.", "Tap Screen timeout."], {"DL-0220"}),
+    ("Adjust Refresh Rate", "It will change motion smoothness setting", S + ["Tap Display.", "Tap Motion smoothness."], {"DL-0228"}),
+    ("Disable Always On Display", "It will turn off always on display", S + ["Tap Lock screen.", "Turn off Always On Display."], {"DL-0482"}),
+    ("Enable Touch Sensitivity", "It will improve touch response on screen", S + ["Tap Display.", "Turn on Touch sensitivity."], {"DL-0126"}),
+    ("Adjust Screen Zoom", "It will make screen content larger", S + ["Tap Display.", "Tap Screen zoom."], {"DL-0229", "DL-0549"}),
+    ("Change Screen Mode", "It will change the display color profile", S + ["Tap Display.", "Tap Screen mode."], {"DL-0215"}),
+    ("Disable Extra Dim", "It will restore normal screen brightness", S + ["Tap Accessibility.", "Turn off Extra dim."], {"DL-0203", "DL-0190"}),  # both are Extra dim
+    ("Disable Eye Comfort Shield", "It will turn off blue light filter", S + ["Tap Display.", "Turn off Eye comfort shield."], {"DL-0039"}),
+    ("Back Up Phone Data", "It will facilitate secure data transfer between", S + ["Tap on Accounts and backup.", "Select Back up data."], {"DL-0542"}),
+    ("Optimize Device Performance", "It will clean memory and close apps", S + ["Tap Device care.", "Tap Optimize now."], {"DL-0538"}),
+    ("Run Device Diagnostics", "It will check device hardware status", ["Open TechCorp Members.", "Tap Diagnostics."], {"DL-0478"}),
+    ("Check Warranty Coverage", "It will show warranty period and coverage", ["Open TechCorp Warranty Care.", "Tap Warranty details."], {"DL-0577"}),
+    ("Update System Apps", "It will install latest system app updates", S + ["Tap Software update."], {"DL-0115"}),
+    ("Disable Color Inversion", "It will restore normal screen colors", S + ["Tap Accessibility.", "Turn off Color inversion."], {"DL-0280"}),
+    ("Configure Navigation Bar", "It will let you choose navigation type", S + ["Tap Display.", "Tap Navigation bar."], {"DL-0169"}),
+    ("Disable Screen Flash Notification", "It will stop the screen flashing for alerts", S + ["Tap Accessibility.", "Turn off Screen flash notification."], {"DL-0210"}),
+    ("Enable Dim Strobing", "It will reduce flashing light effects", S + ["Tap Accessibility.", "Turn on Dim strobing."], {"DL-0206"}),
+    ("Enable Power Saving Mode", "It will extend battery life", S + ["Tap Battery.", "Turn on Power saving."], {"DL-0412"}),
+    ("Check Battery Health", "It will diagnose battery status", ["Open TechCorp Members.", "Tap Battery status."], {"DL-0477"}),
+    ("Turn On Bluetooth", "It will enable Bluetooth connection", S + ["Tap Connections.", "Turn on Bluetooth."], {"DL-0495"}),
+    ("Turn On Wi-Fi", "It will enable wireless network connection", S + ["Tap Connections.", "Turn on Wi-Fi."], {"DL-0574"}),
+    ("Enable Mobile Data", "It will turn on cellular data", S + ["Tap Connections.", "Turn on Mobile data."], {"DL-0082"}),
+    ("Turn Off Airplane Mode", "It will restore wireless connections", S + ["Tap Connections.", "Turn off Airplane mode."], {"DL-0274"}),
+    ("Enable Keep Screen On While Viewing", "It will keep screen on while viewing", S + ["Tap Advanced features.", "Turn on Keep screen on while viewing."], {"DL-0259"}),
+    ("Disable Auto Dim Screen", "It will stop screen dimming on low battery", S + ["Tap Battery.", "Turn off Auto dim screen."], {"DL-0401"}),
+    ("Open One-handed Mode", "It will turn off the shrunken screen", S + ["Tap Advanced features.", "Tap One-handed mode."], {"DL-0537"}),
+    # Screens with no catalog entry: the dummy is the correct answer.
+    ("Configure Game Booster", "It will open game booster settings", S + ["Tap Advanced features.", "Tap Game Booster."], "dummy"),
+    ("Disable Assistant Menu", "It will remove the floating shortcut circle", S + ["Tap Accessibility.", "Tap Interaction and dexterity.", "Turn off Assistant menu."], "dummy"),
+    ("Configure Edge Lighting", "It will change edge lighting style", S + ["Tap Notifications.", "Tap Edge lighting style."], "dummy"),
+    ("Adjust Cover Screen Settings", "It will configure the cover screen display", S + ["Tap Cover screen."], "dummy"),
+]
+
+
+# Held-out set: labelled before the label-matching layer was written and never used to tune
+# it. Report it separately; if CASES improves but HELDOUT doesn't, the fix is overfitted.
+HELDOUT = [
+    ("Disable Bluetooth", "It will turn off Bluetooth connection", S + ["Tap Connections.", "Turn off Bluetooth."], {"DL-0494"}),
+    ("Turn Off Wi-Fi", "It will disconnect from wireless networks", S + ["Tap Connections.", "Turn off Wi-Fi."], {"DL-0573"}),
+    ("Enable Airplane Mode", "It will turn off all wireless signals", S + ["Tap Connections.", "Turn on Airplane mode."], {"DL-0275"}),
+    ("Enable Always On Display", "It will show time while screen off", S + ["Tap Lock screen.", "Turn on Always On Display."], {"DL-0483"}),
+    ("Turn On Location", "It will let apps use your location", S + ["Tap Location.", "Turn on Location."], {"DL-0149"}),
+    ("Enable NFC Payments", "It will allow contactless payments", S + ["Tap Connections.", "Turn on NFC and contactless payments."], {"DL-0177"}),
+    ("Enable Bold Font", "It will make system text bold", S + ["Tap Display.", "Tap Bold font."], {"DL-0045"}),
+    ("Adjust Media Volume", "It will change music and video volume", S + ["Tap Sounds and vibration.", "Tap Volume.", "Drag the Media slider."], {"DL-0161"}),
+    ("Disable Do Not Disturb", "It will allow calls and alerts again", S + ["Tap Notifications.", "Tap Do not disturb.", "Turn off Do not disturb."], {"DL-0505"}),
+    ("Enable Fast Charging", "It will charge the battery faster", S + ["Tap Battery.", "Tap Charging settings.", "Turn on Fast charging."], {"DL-0404", "DL-0514"}),
+    ("Enable Battery Protection", "It will limit charging to protect battery", S + ["Tap Battery.", "Tap Battery protection."], {"DL-0410", "DL-0517"}),
+    ("Turn Off Mobile Hotspot", "It will stop sharing your internet connection", S + ["Tap Connections.", "Tap Mobile Hotspot and Tethering.", "Turn off Mobile Hotspot."], {"DL-0311"}),
+    ("Enable Eye Comfort Shield", "It will reduce blue light at night", S + ["Tap Display.", "Turn on Eye comfort shield."], {"DL-0040"}),
+    ("Disable Lift to Wake", "It will stop screen waking when lifted", S + ["Tap Advanced features.", "Tap Motions and gestures.", "Turn off Lift to wake."], {"DL-0146"}),
+    ("Enable Double Tap to Wake", "It will wake screen with double tap", S + ["Tap Advanced features.", "Tap Motions and gestures.", "Turn on Double tap to turn on screen."], {"DL-0089"}),
+    ("Open Fingerprint Settings", "It will manage your registered fingerprints", S + ["Tap Security and privacy.", "Tap Biometrics.", "Tap Fingerprints."], {"DL-0551"}),
+    ("Change Font Style", "It will change the system font style", S + ["Tap Display.", "Tap Font size and style."], "dummy"),
+    ("Enable Developer Options", "It will unlock advanced developer settings", S + ["Tap About phone.", "Tap Software information.", "Tap Build number seven times."], "dummy"),
+]
+
+
+# Calibration set: actions whose names paraphrase the catalog label (so most fall through to the
+# BM25 fallback), plus screens the catalog lacks. Labelled before the BM25 cutoff was changed
+# and used to choose it (see --sweep).
+CALIBRATION = [
+    ("Adjust Display Brightness", "It will make the screen brighter", S + ["Tap Display.", "Drag the Brightness slider."], {"DL-0232", "DL-0496"}),
+    ("Check Battery Usage", "It will show which apps drain battery", S + ["Tap Battery."], {"DL-0560"}),
+    ("Change Ringtone", "It will set a new call ringtone", S + ["Tap Sounds and vibration.", "Tap Ringtone."], {"DL-0209"}),
+    ("Increase Ringtone Volume", "It will make incoming calls louder", S + ["Tap Sounds and vibration.", "Tap Volume.", "Drag the Ringtone slider."], {"DL-0208"}),
+    ("Reduce Blue Light", "It will ease eye strain at night", S + ["Tap Display.", "Turn on Eye comfort shield."], {"DL-0040"}),
+    ("Share Battery Wirelessly", "It will charge other devices from phone", S + ["Tap Battery.", "Turn on Wireless power sharing."], {"DL-0414"}),
+    ("Limit Background Data", "It will reduce mobile data usage", S + ["Tap Connections.", "Tap Data usage.", "Tap Data saver."], {"DL-0080"}),
+    ("Switch to Dark Theme", "It will make the interface darker", S + ["Tap Display.", "Tap Dark mode settings."], {"DL-0078", "DL-0225"}),
+    ("Update Carrier Configuration", "It will refresh network carrier settings", S + ["Tap Software update.", "Tap Auto update system configurations."], {"DL-0024"}),
+    ("Adjust Vibration Strength", "It will make vibrations stronger", S + ["Tap Sounds and vibration.", "Tap Vibration intensity."], {"DL-0563"}),
+    ("Manage Connected Devices", "It will show linked phones and PCs", S + ["Tap Connected devices."], {"DL-0534"}),
+    ("Schedule Automatic Restart", "It will restart the phone on schedule", S + ["Tap Device care.", "Tap Restart on schedule."], {"DL-0419"}),
+    ("Free Up Storage Space", "It will delete unused files", S + ["Tap Device care.", "Tap Storage."], "dummy"),
+    ("Clear App Cache", "It will remove temporary app data", S + ["Tap Apps.", "Tap the app.", "Tap Storage.", "Tap Clear cache."], "dummy"),
+    ("Reset Network Settings", "It will restore default network configuration", S + ["Tap General management.", "Tap Reset.", "Tap Reset network settings."], "dummy"),
+    ("Change Wallpaper", "It will set a new background image", S + ["Tap Wallpaper and style.", "Tap Change wallpapers."], "dummy"),
+    ("Adjust Font Size", "It will make text easier to read", S + ["Tap Display.", "Tap Font size and style."], "dummy"),
+    ("Manage App Permissions", "It will control what apps can access", S + ["Tap Apps.", "Tap Permission manager."], "dummy"),
+    ("Enable Auto Rotate", "It will rotate the screen automatically", ["Swipe down from the top of the screen.", "Tap Auto rotate."], "dummy"),
+    ("Check Signal Strength", "It will show current network signal", S + ["Tap About phone.", "Tap Status information.", "Tap SIM card status."], "dummy"),
+    ("Change Screen Resolution", "It will set a sharper display resolution", S + ["Tap Display.", "Tap Screen resolution."], "dummy"),
+    ("Enable USB Debugging", "It will allow computer debugging access", S + ["Tap Developer options.", "Turn on USB debugging."], "dummy"),
+]
+
+# Final check: labelled before the cutoff and the label-layer changes, run once at the end.
+FINAL = [
+    ("Turn Off Mobile Data", "It will stop cellular data usage", S + ["Tap Connections.", "Turn off Mobile data."], {"DL-0081"}),
+    ("Enable Wi-Fi Scanning", "It will improve location accuracy", S + ["Tap Location.", "Tap Location services.", "Turn on Wi-Fi scanning."], {"DL-0310"}),
+    ("Adjust Alarm Volume", "It will make alarms louder", S + ["Tap Sounds and vibration.", "Tap Volume.", "Drag the Alarm slider."], {"DL-0011"}),
+    ("Disable Touch Sounds", "It will silence taps on the screen", S + ["Tap Sounds and vibration.", "Tap System sound.", "Turn off Touch interactions."], {"DL-0290"}),
+    ("Enable Auto Restart", "It will restart the device when needed", S + ["Tap Device care.", "Tap Auto optimization.", "Turn on Restart the device when needed."], {"DL-0480"}),
+    ("Open Home Screen Settings", "It will customize home screen layout", S + ["Tap Home screen."], {"DL-0561"}),
+    ("Disable Put Unused Apps to Sleep", "It will keep background apps running", S + ["Tap Battery.", "Tap Background usage limits.", "Turn off Put unused apps to sleep."], {"DL-0416"}),
+    ("Adjust Screen Saver", "It will change the idle screen display", S + ["Tap Display.", "Tap Screen saver."], {"DL-0221"}),
+    ("Open Color Correction Shortcut", "It will set up color correction", S + ["Tap Accessibility.", "Tap Color correction shortcut."], {"DL-0077"}),
+    ("Change Sound Mode", "It will switch between sound and vibrate", S + ["Tap Sounds and vibration.", "Tap Sound mode."], {"DL-0260", "DL-0557"}),
+    ("Enable Link to Windows", "It will connect the phone to PC", S + ["Tap Connected devices.", "Turn on Link to Windows."], {"DL-0159", "DL-0423"}),
+    ("Open Keyboard Settings", "It will manage on-screen keyboards", S + ["Tap General management.", "Tap Keyboard list and default."], {"DL-0565"}),
+    ("Increase Touch Sensitivity", "It will improve response with screen protector", S + ["Tap Display.", "Turn on Touch sensitivity."], {"DL-0126"}),
+    ("Enable Dual Messenger", "It will run two copies of apps", S + ["Tap Advanced features.", "Tap Dual Messenger."], "dummy"),
+    ("Check Storage Usage", "It will show what uses storage space", S + ["Tap Battery and device care.", "Tap Storage."], "dummy"),
+    ("Clear Cache Partition", "It will clear system cache files", ["Turn off the device.", "Hold Power and Volume up.", "Select Wipe cache partition."], "dummy"),
+]
+
+
+def _sibling(a: dict, b: dict) -> bool:
+    """On/off pair: same validation key, opposite originalType."""
+    ka = (a.get("validation") or {}).get("key")
+    kb = (b.get("validation") or {}).get("key")
+    return bool(ka) and ka == kb and {a.get("originalType"), b.get("originalType")} == {"onURL", "offURL"}
+
+
+def evaluate(title: str, cases: list, quiet: bool = False) -> dict:
+    counts = {"correct": 0, "wrong": 0, "polarity": 0, "missed": 0, "dummy_ok": 0, "dummy_bad": 0}
+    rows = []
+    for name, desc, steps, expected in cases:
+        dl, score = get_deeplinks(name, desc, category=ActionCategory.auto, steps=steps, return_score=True)
+        uri = dl.deeplink if dl else None
+        got = BY_URI.get(uri, {}) if uri and uri != DUMMY_DEEPLINK_URI else None
+        got_label = got["id"] + " " + got["message"] if got else ("dummy" if uri == DUMMY_DEEPLINK_URI else "no link")
+
+        if expected == "dummy":
+            verdict = "dummy_bad" if got else "dummy_ok"
+        elif got and got["id"] in expected:
+            verdict = "correct"
+        elif got:
+            verdict = "wrong"
+            if any(_sibling(got, BY_ID[e]) for e in expected):
+                counts["polarity"] += 1
+                verdict = "wrong (polarity)"
+        else:
+            verdict = "missed"
+        counts[verdict.split(" ")[0]] += 1
+        want = "dummy" if expected == "dummy" else ", ".join(sorted(expected))
+        rows.append((verdict, score, name, got_label, want))
+
+    if quiet:
+        return counts
+    print(f"\n=== {title} ({len(cases)} cases) ===\n")
+    print(f"{'verdict':17} {'score':>6}  {'action':36} {'served':44} expected")
+    print("-" * 130)
+    for verdict, score, name, got_label, want in rows:
+        mark = "OK " if verdict in ("correct", "dummy_ok") else "XX "
+        print(f"{mark}{verdict:14} {score if score is not None else 0:6.3f}  {name:36} {got_label[:44]:44} {want}")
+
+    n_cat = sum(1 for c in cases if c[3] != "dummy")
+    n_dummy = len(cases) - n_cat
+    print(f"\nCatalog screens ({n_cat}): {counts['correct']} correct, {counts['wrong']} wrong link served "
+          f"({counts['polarity']} of them on/off polarity), {counts['missed']} missed")
+    print(f"Unindexed screens ({n_dummy}): {counts['dummy_ok']} dummy/no link correctly, {counts['dummy_bad']} wrong catalog link served")
+    total_ok = counts["correct"] + counts["dummy_ok"]
+    print(f"Overall: {total_ok}/{len(cases)} = {total_ok / len(cases):.0%} correct; "
+          f"{counts['wrong'] + counts['dummy_bad']} cases would send the user to the wrong Settings screen")
+    return counts
+
+
+def sweep() -> None:
+    """Wrong-screen vs. lost-correct trade-off of the BM25 cutoff on the calibration set."""
+    original = pipeline.BM25_MIN_RELEVANCE
+    print(f"BM25 cutoff sweep on CALIBRATION ({len(CALIBRATION)} cases; current = {original})\n")
+    print(f"{'cutoff':>6}  {'correct':>7}  {'wrong screen':>12}  {'missed':>6}")
+    try:
+        for t in [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9]:
+            pipeline.BM25_MIN_RELEVANCE = t
+            c = evaluate("", CALIBRATION, quiet=True)
+            print(f"{t:6.2f}  {c['correct'] + c['dummy_ok']:>7}  {c['wrong'] + c['dummy_bad']:>12}  {c['missed']:>6}")
+    finally:
+        pipeline.BM25_MIN_RELEVANCE = original
+
+
+def main() -> None:
+    if "--sweep" in sys.argv:
+        sweep()
+        return
+    sets = {"dev": ("Development set", CASES), "heldout": ("Held-out set", HELDOUT),
+            "calibration": ("Calibration set", CALIBRATION), "final": ("Final check", FINAL)}
+    chosen = [a for a in sys.argv[1:] if a in sets] or ["dev", "heldout", "calibration"]
+    for key in chosen:
+        evaluate(*sets[key])
+
+
+if __name__ == "__main__":
+    main()

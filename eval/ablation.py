@@ -90,11 +90,14 @@ def rules_based_match_action(
         catalog_path, _ = find_catalog_path()
         with open(catalog_path, "r", encoding="utf-8") as f:
             catalog = json.load(f)
+        # The official catalog wraps entries: {"_readme", "count", "deeplinks": [...]}
+        if isinstance(catalog, dict):
+            catalog = catalog.get("deeplinks", [])
 
     # Filter out dummy_positive placeholder from candidate matching pool
     candidate_entries = [
         item for item in catalog
-        if item.get("deeplink") and item.get("deeplink") != "bixby://dummy_positive"
+        if item.get("deeplink") and item.get("deeplink") != "voiceassist://dummy_positive"
     ]
 
     # Extract keywords (>2 characters, stripped of noise/stopwords)
@@ -131,7 +134,7 @@ def rules_based_match_action(
     # Fallback Rule: For auto actions without a catalog substring match, route to dummy_positive
     if cat == "auto":
         return {
-            "deeplink": "bixby://dummy_positive",
+            "deeplink": "voiceassist://dummy_positive",
             "description": "Open general device settings placeholder",
             "message": "navigate to unindexed settings screen",
         }
@@ -204,7 +207,7 @@ def run_ablation(
     retriever = get_retriever()
     catalog = retriever.catalog
     valid_uris = {item.get("deeplink") for item in catalog if item.get("deeplink")}
-    valid_uris.add("bixby://dummy_positive")
+    valid_uris.add("voiceassist://dummy_positive")
 
     if live:
         # In live mode, execute Variant A and Variant B with real Gemini calls
@@ -267,7 +270,7 @@ def run_ablation(
         print("\n--- Running Variant B (Baseline: Direct LLM, No BM25) Live ---")
         catalog_summary = "\n".join([
             f"- Deeplink: {item.get('deeplink')} | Description: {item.get('description')} | Message: {item.get('message')}"
-            for item in catalog if item.get("deeplink") != "bixby://dummy_positive"
+            for item in catalog if item.get("deeplink") != "voiceassist://dummy_positive"
         ])
 
         b_latencies = []

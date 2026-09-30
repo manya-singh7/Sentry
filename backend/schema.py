@@ -28,7 +28,7 @@ def contains_url(text: str) -> bool:
 def scrub_urls(text: str) -> str:
     """
     Programmatically scrub web URLs from text (including markdown links, http/https, www).
-    Preserves bixby:// URIs and cleans dangling whitespace.
+    Preserves voiceassist:// catalog URIs and cleans dangling whitespace.
     """
     if not text:
         return text
@@ -75,6 +75,10 @@ class ActionCategory(str, Enum):
 # Deeplink Models
 # ---------------------------------------------------------------------------
 
+DEEPLINK_SCHEME = "voiceassist://"  # scheme used by the official deeplinks.json catalog
+DUMMY_DEEPLINK_URI = f"{DEEPLINK_SCHEME}dummy_positive"
+
+
 class BaseDeeplink(BaseModel):
     deeplink: str
 
@@ -86,8 +90,8 @@ class BaseDeeplink(BaseModel):
         v = v.strip()
         if contains_url(v):
             raise ValueError(f"deeplink cannot contain web URLs: {v}")
-        if not v.startswith("bixby://"):
-            raise ValueError(f"deeplink must be a valid Bixby URI (starting with bixby://): {v}")
+        if not v.startswith(DEEPLINK_SCHEME):
+            raise ValueError(f"deeplink must be a catalog URI (starting with {DEEPLINK_SCHEME}): {v}")
         return v
 
 
@@ -210,6 +214,7 @@ _COMMON_ACRONYMS_AND_PROPER = {
     "oled", "amoled", "lcd", "led", "hdr", "fps", "hz",
     # Ecosystem & Samsung Features
     "samsung", "galaxy", "android", "bixby", "google", "knox", "dex", "oneui",
+    "techcorp", "nexa", "voiceassist",
     "smart", "view", "switch", "routines", "routine", "share", "pen",
     # Audio, Media & Sensors
     "dolby", "atmos", "codec", "dac", "anc", "eq", "pin", "sos", "biometrics",

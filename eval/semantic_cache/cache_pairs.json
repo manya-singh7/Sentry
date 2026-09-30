@@ -33,6 +33,9 @@
   {"a": "camera photos are blurry", "b": "battery drains fast", "expected": "veto", "note": "different domain"},
   {"a": "blutooth not wrking", "b": "wifi not wrking", "expected": "veto", "note": "typo + entity swap"},
   {"a": "storage almost full", "b": "memory almost full", "expected": "veto", "note": "entity veto above threshold (sim ~0.78): storage vs RAM"},
+  {"a": "My Nexa Fold X1 screen went completely black, so I can't see or interact with the phone, and I'm unable to use Data Transfer or any other method to transfer my data.", "b": "My tablet screen stays completely blank when I try to use Data Transfer to scan the QR code for transferring data from my Nexa X1 phone, so the transfer can't proceed.", "expected": "veto", "note": "official input.txt q03 vs q05 (sim 0.750): dead foldable screen vs tablet blank during transfer"},
+  {"a": "my tablet screen flickers", "b": "my phone screen flickers", "expected": "veto", "note": "device veto: tablet vs phone"},
+  {"a": "screen flickers on my phone", "b": "display keeps flickering", "expected": "hit", "note": "device named on one side only: no device veto"},
   {"a": "notifications not working", "b": "notification sound not working", "expected": "veto", "note": "entity veto above threshold (sim ~0.77)"},
   {"a": "bluetooth wont connect lol", "b": "wifi wont connect lol", "expected": "veto", "note": "casual + entity swap"},
 

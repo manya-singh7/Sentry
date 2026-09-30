@@ -71,7 +71,7 @@ Processes a customer complaint and optional customer-care reference text (`siis_
                 "Optionally toggle on Gesture hint to display guidance lines at the bottom of the screen."
               ],
               "actionableDeeplink": {
-                "deeplink": "bixby://masked/act/setting/display/navigation_bar",
+                "deeplink": "voiceassist://masked/act/2f3dd95259",
                 "description": "Open navigation bar settings under Display",
                 "message": "choose navigation type in Display settings"
               },
@@ -91,7 +91,7 @@ Processes a customer complaint and optional customer-care reference text (`siis_
                 "Tap Safe mode to reboot and test gesture behavior."
               ],
               "actionableDeeplink": {
-                "deeplink": "bixby://dummy_positive",
+                "deeplink": "voiceassist://dummy_positive",
                 "description": "Open general device settings placeholder",
                 "message": "navigate to unindexed settings screen"
               },
@@ -130,10 +130,10 @@ Processes a customer complaint and optional customer-care reference text (`siis_
 1. **Ranked Hypotheses**: `contexts` contains up to 2 `Goal` objects ordered by confidence `score` descending.
 2. **Category Ordering**: Actions inside every goal are ordered strictly: `auto` (non-invasive settings) first $\rightarrow$ `manual` (physical cleaning/hardware) $\rightarrow$ `critical` (reboot/factory reset/safe mode) last.
 3. **Deeplink Integrity & Guardrails**:
-   - `auto`: Carries catalog deeplink if strong match (>= 0.5 relevance matched strictly on `description`, `message`, `qna_description`, never URI string); falls back to `bixby://dummy_positive` if valid Settings screen without catalog entry; otherwise `null`.
+   - `auto`: Carries catalog deeplink if strong match (>= 0.5 relevance matched strictly on `description`, `message`, `qna_description`, never URI string); falls back to `voiceassist://dummy_positive` if valid Settings screen without catalog entry; otherwise `null`.
    - `critical`: Critical operations that are not Settings screens (reboot, restart, safe mode, factory reset) carry no deeplink (`actionableDeeplink = null`).
    - `manual`: Physical interventions strictly carry no deeplink (`actionableDeeplink = null`).
-   - **Final Response Validator**: Every actionable deeplink must be in the loaded catalog or exactly `bixby://dummy_positive`, else it is automatically stripped to `null` and logged.
+   - **Final Response Validator**: Every actionable deeplink must be in the loaded catalog or exactly `voiceassist://dummy_positive`, else it is automatically stripped to `null` and logged.
 4. **Zero Web URLs**: Steps, descriptions, titles, and goals strictly contain **zero** `http`, `https`, `www.`, or markdown links.
 
 ---

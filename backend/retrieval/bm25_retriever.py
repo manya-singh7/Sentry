@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 from rank_bm25 import BM25Okapi
 
+from .label_match import is_junk_entry
+
 logger = logging.getLogger("diagnos_ai.retrieval")
 
 _DEEPLINK_STOPWORDS = {
@@ -71,9 +73,11 @@ class BM25Retriever:
             print(warn_msg)
         
         self.catalog = self._load_catalog(self.catalog_path)
-        # Filter out dummy_positive from indexing
+        # Filter out the dummy_positive placeholder and malformed entries whose label is a
+        # URL type ("onURL"/"offURL", message "Onurl"/"Offurl") from indexing
         self.indexed_docs = [
-            item for item in self.catalog if item.get("deeplink") != "bixby://dummy_positive"
+            item for item in self.catalog
+            if not str(item.get("deeplink", "")).endswith("://dummy_positive") and not is_junk_entry(item)
         ]
         
         self.tokenized_corpus = [
@@ -89,6 +93,9 @@ class BM25Retriever:
     def _load_catalog(path: Path) -> List[Dict[str, Any]]:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        # The official catalog wraps entries: {"_readme", "count", "deeplinks": [...]}
+        if isinstance(data, dict):
+            data = data.get("deeplinks", [])
         return data if isinstance(data, list) else []
 
     def retrieve(

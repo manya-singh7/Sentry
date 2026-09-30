@@ -57,7 +57,7 @@ def run_tests():
                                 "Optionally toggle on Gesture hint to display guidance lines at the bottom of the screen.",
                             ],
                             actionableDeeplink=Deeplink(
-                                deeplink="bixby://dummy_positive",
+                                deeplink="voiceassist://dummy_positive",
                                 description="Open navigation bar settings under Display",
                                 message="choose navigation type in Display settings",
                             ),
@@ -269,7 +269,7 @@ def run_tests():
                 StepGroup(
                     steps=["Gently use a wooden toothpick to remove lint."],
                     actionableDeeplink=Deeplink(
-                        deeplink="bixby://dummy_positive",
+                        deeplink="voiceassist://dummy_positive",
                         description="Invalid deeplink on manual action",
                     ),
                 )

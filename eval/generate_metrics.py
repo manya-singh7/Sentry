@@ -90,7 +90,7 @@ def compute_metrics(results_path: Path) -> Dict[str, Any]:
     valid_catalog_uris = {
         item.get("deeplink") for item in retriever.catalog if item.get("deeplink")
     }
-    valid_catalog_uris.add("bixby://dummy_positive")
+    valid_catalog_uris.add("voiceassist://dummy_positive")
 
     valid_catalog_deeplinks = 0
     total_actionable_deeplinks = 0
@@ -166,7 +166,7 @@ def compute_metrics(results_path: Path) -> Dict[str, Any]:
                             total_actionable_deeplinks += 1
                             if uri in valid_catalog_uris:
                                 valid_catalog_deeplinks += 1
-                            if uri != "bixby://dummy_positive" and uri in valid_catalog_uris:
+                            if uri != "voiceassist://dummy_positive" and uri in valid_catalog_uris:
                                 exact_screen_deeplinks += 1
 
                     if is_auto and has_dl:
@@ -451,7 +451,7 @@ Evaluated against reference ground truth scenarios across Battery, Display, Came
 
 ## 6. Known Edge Cases & System Limitations
 * **Multi-intent complaints**: Vague complaints spanning multiple hardware components trigger `/v1/clarify` for targeted single-turn disambiguation.
-* **Unindexed Settings screens**: Valid Android/One UI screens missing in catalog cleanly route to `bixby://dummy_positive` rather than hallucinating arbitrary URIs.
+* **Unindexed Settings screens**: Valid Android/One UI screens missing in catalog cleanly route to `voiceassist://dummy_positive` rather than hallucinating arbitrary URIs.
 * **Sample dataset**: Initial numbers are collected over `queries.sample.json` and `deeplinks.sample.json`. Production benchmark will re-populate upon receipt of the official PRISM enterprise dataset.
 """
 
