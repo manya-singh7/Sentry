@@ -70,6 +70,30 @@ CASES = [
 ]
 
 
+# Held-out set: labelled before the label-matching layer was written and never used to tune
+# it. Report it separately; if CASES improves but HELDOUT doesn't, the fix is overfitted.
+HELDOUT = [
+    ("Disable Bluetooth", "It will turn off Bluetooth connection", S + ["Tap Connections.", "Turn off Bluetooth."], {"DL-0494"}),
+    ("Turn Off Wi-Fi", "It will disconnect from wireless networks", S + ["Tap Connections.", "Turn off Wi-Fi."], {"DL-0573"}),
+    ("Enable Airplane Mode", "It will turn off all wireless signals", S + ["Tap Connections.", "Turn on Airplane mode."], {"DL-0275"}),
+    ("Enable Always On Display", "It will show time while screen off", S + ["Tap Lock screen.", "Turn on Always On Display."], {"DL-0483"}),
+    ("Turn On Location", "It will let apps use your location", S + ["Tap Location.", "Turn on Location."], {"DL-0149"}),
+    ("Enable NFC Payments", "It will allow contactless payments", S + ["Tap Connections.", "Turn on NFC and contactless payments."], {"DL-0177"}),
+    ("Enable Bold Font", "It will make system text bold", S + ["Tap Display.", "Tap Bold font."], {"DL-0045"}),
+    ("Adjust Media Volume", "It will change music and video volume", S + ["Tap Sounds and vibration.", "Tap Volume.", "Drag the Media slider."], {"DL-0161"}),
+    ("Disable Do Not Disturb", "It will allow calls and alerts again", S + ["Tap Notifications.", "Tap Do not disturb.", "Turn off Do not disturb."], {"DL-0505"}),
+    ("Enable Fast Charging", "It will charge the battery faster", S + ["Tap Battery.", "Tap Charging settings.", "Turn on Fast charging."], {"DL-0404", "DL-0514"}),
+    ("Enable Battery Protection", "It will limit charging to protect battery", S + ["Tap Battery.", "Tap Battery protection."], {"DL-0410", "DL-0517"}),
+    ("Turn Off Mobile Hotspot", "It will stop sharing your internet connection", S + ["Tap Connections.", "Tap Mobile Hotspot and Tethering.", "Turn off Mobile Hotspot."], {"DL-0311"}),
+    ("Enable Eye Comfort Shield", "It will reduce blue light at night", S + ["Tap Display.", "Turn on Eye comfort shield."], {"DL-0040"}),
+    ("Disable Lift to Wake", "It will stop screen waking when lifted", S + ["Tap Advanced features.", "Tap Motions and gestures.", "Turn off Lift to wake."], {"DL-0146"}),
+    ("Enable Double Tap to Wake", "It will wake screen with double tap", S + ["Tap Advanced features.", "Tap Motions and gestures.", "Turn on Double tap to turn on screen."], {"DL-0089"}),
+    ("Open Fingerprint Settings", "It will manage your registered fingerprints", S + ["Tap Security and privacy.", "Tap Biometrics.", "Tap Fingerprints."], {"DL-0551"}),
+    ("Change Font Style", "It will change the system font style", S + ["Tap Display.", "Tap Font size and style."], "dummy"),
+    ("Enable Developer Options", "It will unlock advanced developer settings", S + ["Tap About phone.", "Tap Software information.", "Tap Build number seven times."], "dummy"),
+]
+
+
 def _sibling(a: dict, b: dict) -> bool:
     """On/off pair: same validation key, opposite originalType."""
     ka = (a.get("validation") or {}).get("key")
@@ -77,10 +101,10 @@ def _sibling(a: dict, b: dict) -> bool:
     return bool(ka) and ka == kb and {a.get("originalType"), b.get("originalType")} == {"onURL", "offURL"}
 
 
-def main() -> None:
+def evaluate(title: str, cases: list) -> None:
     counts = {"correct": 0, "wrong": 0, "polarity": 0, "missed": 0, "dummy_ok": 0, "dummy_bad": 0}
     rows = []
-    for name, desc, steps, expected in CASES:
+    for name, desc, steps, expected in cases:
         dl, score = get_deeplinks(name, desc, category=ActionCategory.auto, steps=steps, return_score=True)
         uri = dl.deeplink if dl else None
         got = BY_URI.get(uri, {}) if uri and uri != DUMMY_DEEPLINK_URI else None
@@ -101,20 +125,26 @@ def main() -> None:
         want = "dummy" if expected == "dummy" else ", ".join(sorted(expected))
         rows.append((verdict, score, name, got_label, want))
 
+    print(f"\n=== {title} ({len(cases)} cases) ===\n")
     print(f"{'verdict':17} {'score':>6}  {'action':36} {'served':44} expected")
     print("-" * 130)
     for verdict, score, name, got_label, want in rows:
         mark = "OK " if verdict in ("correct", "dummy_ok") else "XX "
         print(f"{mark}{verdict:14} {score if score is not None else 0:6.3f}  {name:36} {got_label[:44]:44} {want}")
 
-    n_cat = sum(1 for c in CASES if c[3] != "dummy")
-    n_dummy = len(CASES) - n_cat
+    n_cat = sum(1 for c in cases if c[3] != "dummy")
+    n_dummy = len(cases) - n_cat
     print(f"\nCatalog screens ({n_cat}): {counts['correct']} correct, {counts['wrong']} wrong link served "
           f"({counts['polarity']} of them on/off polarity), {counts['missed']} missed")
     print(f"Unindexed screens ({n_dummy}): {counts['dummy_ok']} dummy correctly, {counts['dummy_bad']} wrong catalog link served")
     total_ok = counts["correct"] + counts["dummy_ok"]
-    print(f"Overall: {total_ok}/{len(CASES)} = {total_ok / len(CASES):.0%} correct; "
+    print(f"Overall: {total_ok}/{len(cases)} = {total_ok / len(cases):.0%} correct; "
           f"{counts['wrong'] + counts['dummy_bad']} cases would send the user to the wrong Settings screen")
+
+
+def main() -> None:
+    evaluate("Development set", CASES)
+    evaluate("Held-out set", HELDOUT)
 
 
 if __name__ == "__main__":
