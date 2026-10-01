@@ -410,6 +410,9 @@ function renderResponse(data,cd=null){
   if(fallback==="vision_unavailable"){
     resultsContainer.innerHTML=`<div class="panel empty"><h3>Photo analysis is unavailable</h3><p>${esc(message||"Sentry couldn't analyze this image right now. Describe the problem in text instead.")}</p></div>`; return;
   }
+  if(fallback==="service_busy"){
+    resultsContainer.innerHTML=`<div class="panel empty"><h3>⏳ Service is busy</h3><p>The AI service is temporarily busy, please try again in a moment.</p></div>`; return;
+  }
   if(fallback==="no_match"||fallback==="no_siis_context"||contexts.length===0){
     resultsContainer.innerHTML=`<div class="panel empty"><h3>No confident match in the catalog</h3><p>Try naming the symptom or setting, such as "swipe navigation", "battery drain", or "camera reset".</p></div>`; return;
   }
