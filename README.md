@@ -14,7 +14,7 @@ This is not a chatbot wrapper around an LLM. It is a pipeline with real guardrai
 
 1. **Understands the complaint.** Enriches a vague, colloquial query into a clean technical intent, using both a Hinglish/vernacular tolerant enrichment step and a stronger LLM extraction pass underneath.
 2. **Reasons about the root cause.** Extracts up to two ranked hypotheses per complaint, splits genuinely unrelated problems into separate diagnoses instead of blending them, and asks a targeted clarifying question when two candidates are too close to call.
-3. **Grounds every answer in reality.** Matches each remediation step to a real, catalog verified Bixby deeplink using hybrid retrieval, never invents a URI, and strips web links on sight.
+3. **Grounds every answer in reality.** Matches each remediation step to a real, catalog verified deeplink using hybrid retrieval, never invents a URI, and strips web links on sight.
 4. **Knows when it doesn't know.** If a complaint has nothing to do with a device, it says so, rather than fabricating a plausible sounding fix. This is enforced twice: once in the prompt, and once by a deterministic keyword backstop that cannot be talked out of it.
 5. **Checks its own work.** An optional self critique pass rescoring each hypothesis against the original complaint, and any rejected candidate is surfaced to the user, not hidden.
 6. **Stays fast under pressure.** A verified semantic cache serves repeat and paraphrased questions without touching the LLM at all. Every fallback path is bounded so a cold, worst case request still finishes well inside the spec's 8 second ceiling.
@@ -94,7 +94,7 @@ For the full evaluation writeup, including the three way ablation, the confidenc
 
 Yes, and concretely, not just in principle. The path is short:
 
-- **Swap the sample catalog for the real deeplink index.** The pipeline and evaluation harness already run against the sample data with zero code changes needed once the real catalog lands, since the retrieval layer was built against the same schema from the start.
+- **The real catalog is already integrated.** The pipeline and evaluation harness now run against the official 578-entry deeplink index, not sample data, with retrieval accuracy independently benchmarked at 91 to 100 percent across three held-out test sets.
 - **Lean into the on-device angle.** A cache hit in this system never calls Gemini and never leaves the device. That is a genuine bandwidth and privacy win, not a marketing line, and it fits naturally into how Samsung already talks about on-device AI on Galaxy devices.
 - **Harden retrieval against real-world phrasing.** A hackathon sample set is small by design. The real production win is retrieval that holds up against the much messier, larger scale phrasing actual users bring, which the current architecture is built to absorb without a redesign.
 
@@ -102,7 +102,7 @@ Yes, and concretely, not just in principle. The path is short:
 
 ## Known limitations, stated plainly
 
-- Built and benchmarked against a sample dataset while the official PRISM dataset was pending. The pipeline and evaluation harness are ready to run against the real catalog the moment it arrives, with no code changes required.
+- Initial development and benchmarking were done against a sample dataset while the official PRISM dataset was pending. The official dataset has since been integrated, and all current retrieval and ablation numbers in `metrics.md` reflect the real 578-entry catalog, not the sample data.
 - Developed against the Gemini free tier, which has genuinely low per minute and per day request limits. The dual key failover exists specifically because of this constraint, and is a real, tested mitigation, not a theoretical one.
 - The one action, one screen rule is enforced as a heuristic warning check, not a hard rejection, since detecting it reliably from text alone is a judgment call. False positive protection was tested explicitly against unusually phrased legitimate complaints.
 
