@@ -418,7 +418,7 @@ We benchmarked three architectural variants on the identical test query set to p
 **Team Ember**  
 *Vellore Institute of Technology (VIT), Vellore*
 
-* **Manya Singh** (Team Lead, Backend & Integration)
+* **Manya Singh** 
 * **Krishita Gupta**
 * **Muskaan Arora**
 
