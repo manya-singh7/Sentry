@@ -9,6 +9,8 @@
 [![Schema Compliance](https://img.shields.io/badge/Schema%20Compliance-100%25-brightgreen.svg)](metrics.md)
 [![URL Leaks](https://img.shields.io/badge/URL%20Leaks-0-success.svg)](metrics.md)
 
+**📁 Demo video, presentation & documentation: [Google Drive folder](https://drive.google.com/drive/folders/10wWDvrdxXd-FzyDGN1MgAOmW6UMZNecF?usp=share_link)**
+
 *sentry /ˈsɛn-tri/ noun: A soldier stationed to keep guard, verify credentials, and stop whatever does not belong.*
 
 A customer says "screen flickers and the battery dies fast." Today, turning that into an actual fix takes a support agent roughly 15 minutes of manual triage, and the customer still has to hunt through nested Settings menus by hand. Sentry collapses that into a single API call: it reads the complaint the way a person actually types or speaks it, diagnoses what is really going on, and hands back a ranked, validated, one-tap fix, deeplinked straight into the right settings screen.
