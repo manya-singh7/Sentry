@@ -422,5 +422,6 @@ We benchmarked three architectural variants on the identical test query set to p
 * **Krishita Gupta**
 * **Muskaan Arora**
 
-**Repository:** [github.com/manya-singh7/diagnos-ai](https://github.com/manya-singh7/diagnos-ai)  
+**Repository:** [github.com/manya-singh7/sentry](https://github.com/manya-singh7/sentry)  
+**Demo Video:** [Watch Demo Video (Team Ember_Theme2_DemoVid_Sentry.mp4)](Team%20Ember_Theme2_DemoVid_Sentry.mp4)  
 **Project Resources:** [Google Drive Documentation & Media](https://drive.google.com/drive/folders/10wWDvrdxXd-FzyDGN1MgAOmW6UMZNecF?usp=share_link)
